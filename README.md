@@ -69,6 +69,17 @@ socks:
 .\socks2https.exe
 ```
 
+### 代理
+
+- 使用socks5代理客户端配置代理，这里使用proxifier做演示
+
+![proxifier配置](.\images\1.png)
+
+- 安装抓包工具证书到移动设备或模拟器（注意：需要root权限），这里使用burpsuite
+- 抓包
+
+![burp抓包](.\images\2.png)
+
 ## 其他
 
 如有疑问，请在Issues提出
