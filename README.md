@@ -1,7 +1,14 @@
 # socks2https
-A tool that transmits HTTP and HTTPS packets through a SOCKS5 tunnel
+A tool that converts the SOCKS5 protocol to HTTP and HTTPS protocols
 
-一个将http和https数据包通过socks5隧道传输的工具
+一个将socks5协议转化为http和https协议的工具
+
+## 目的
+
+在针对APP渗透测试过程中，会发现某些APP不走系统代理，排查过后发现并不是SSL Pinning的问题，针对这种情况，如何强制抓去不走系统代理的数据包呢？
+
+- 相信使用过Proxifier的朋友都知道，Proxifier能强制使所有协议都走Socks5代理，那么现在需要一个工具，将Proxifier转发的流量转换为HTTP和HTTPS，这样，不走系统代理的数据包也能被我们抓取到了。
+- 其实，Socks5中间人攻击目前也有解决方案，比如说：Yakit、Charles等，但是个人使用体验并不好（原因：Yakit的UI太复杂、Charles没有强大的插件生态支持），所以就开发了这个工具，通过这个工具联动Burp Suite，就能让Burp Suite实现Socks5中间人攻击。
 
 ## 使用方法
 
@@ -76,6 +83,7 @@ socks:
 ![proxifier配置](./images/1.png)
 
 - 安装抓包工具证书到移动设备或模拟器（注意：需要root权限），这里使用burpsuite
+- 在config.yml文件配置下游代理为burpsuite代理地址（这里使用burpsuite默认地址http://127.0.0.1:8080）
 - 抓包
 
 ![burp抓包](./images/2.png)
