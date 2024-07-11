@@ -124,10 +124,13 @@ func failure(conn io.Writer, rep byte) error {
 }
 
 func success(conn net.Conn) error {
+	yaklog.Debugf("bound : %v", comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%v", setting.Bound)))
 	if !setting.Bound {
+		yaklog.Info(comm.SetColor(comm.GREEN_COLOR_TYPE, "no need dns lookup"))
 		_, err := conn.Write([]byte{SOCKS5_VERSION, SUCCEEDED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0})
 		return err
 	}
+	yaklog.Info(comm.SetColor(comm.RED_COLOR_TYPE, "need dns lookup"))
 	addr, port, err := yakutils.ParseStringToHostPort(conn.LocalAddr().String())
 	if err != nil {
 		return err

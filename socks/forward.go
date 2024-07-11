@@ -18,6 +18,9 @@ func forward(protocol int, src, dst net.Conn) error {
 	switch protocol {
 	case HTTP_PROTOCOL:
 		return httpTunnel(src, dst)
+	case HTTPS_PROTOCOL:
+		//return httpsTunnel(src, dst)
+		return tcpTunnel(src, dst)
 	default:
 		return tcpTunnel(src, dst)
 	}
