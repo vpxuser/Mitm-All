@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"socks2https/pkg/comm"
 	"socks2https/setting"
 	"sync"
 )
@@ -56,21 +57,18 @@ func httpTunnel(src, dst net.Conn) error {
 	// 从客户端连接中读取req对象
 	req, err := http.ReadRequest(bufio.NewReader(src))
 	if err != nil {
-		yaklog.Debugf("convert buffer to http request failed , try tcp tunnel")
-		return tcpTunnel(src, dst)
+		//yaklog.Debugf("convert buffer to http request failed , try tcp tunnel")
+		return fmt.Errorf("read request failed : %v", err)
 	}
-	// 将req对象写入到下游代理连接
-	if err = req.Write(dst); err != nil && setting.Config.Socks.DebugSwitch && err != io.EOF {
-		return err
-	}
-	// 从下游代理连接中读取resp对象
-	resp, err := http.ReadResponse(bufio.NewReader(dst), req)
+	comm.DumpRequest(req)
+	resp, err := comm.SendProxiedReq(setting.Proxy, req)
 	if err != nil {
-		return fmt.Errorf("convert buffer to http response failed")
-	}
-	// 将response对象写入到客户端连接
-	if err = resp.Write(src); err != nil && setting.Config.Socks.DebugSwitch && err != io.EOF {
 		return err
+	}
+	comm.DumpResponse(resp)
+	// 将response对象写入到客户端连接
+	if err = resp.Write(src); err != nil && err != io.EOF {
+		return fmt.Errorf("write response failed : %v", err)
 	}
 	return nil
 }

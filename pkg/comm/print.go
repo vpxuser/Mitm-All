@@ -3,6 +3,9 @@ package comm
 import (
 	"fmt"
 	"github.com/logrusorgru/aurora"
+	yaklog "github.com/yaklang/yaklang/common/log"
+	"net/http"
+	"net/http/httputil"
 	"socks2https/setting"
 )
 
@@ -24,8 +27,28 @@ var colorMap = map[int]func(arg interface{}) aurora.Value{
 
 // SetColor 设置字符串颜色
 func SetColor(colorType int, payload string) string {
-	if setting.Config.Log.ColorSwitch {
+	if !setting.NoColor {
 		payload = fmt.Sprint(colorMap[colorType](payload))
 	}
 	return payload
+}
+
+// DumpRequest 打印更美观的 request 信息
+func DumpRequest(req *http.Request) {
+	dump, err := httputil.DumpRequest(req, true)
+	if err != nil {
+		yaklog.Errorf("dump request failed : %v", err)
+		return
+	}
+	yaklog.Debugf("dump request : \n%s", SetColor(BLUE_COLOR_TYPE, string(dump)))
+}
+
+// DumpResponse 打印更美观的 response 信息
+func DumpResponse(resp *http.Response) {
+	dump, err := httputil.DumpResponse(resp, true)
+	if err != nil {
+		yaklog.Errorf("dump response failed : %v", err)
+		return
+	}
+	yaklog.Debugf("dump response : \n%s", SetColor(BLUE_COLOR_TYPE, string(dump)))
 }

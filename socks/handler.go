@@ -6,7 +6,11 @@ import (
 )
 
 func handler(src net.Conn) {
-	defer src.Close()
+	defer func() {
+		if err := src.Close(); err != nil {
+			yaklog.Errorf("src close failed : %v", err)
+		}
+	}()
 	if err := handshake(src); err != nil {
 		yaklog.Errorf("client [%s] socks handshake failed : %v", src.RemoteAddr().String(), err)
 		return
@@ -18,11 +22,15 @@ func handler(src net.Conn) {
 		yaklog.Errorf("client [%s] connect to target host failed : %v", src.RemoteAddr().String(), err)
 		return
 	}
-	defer dst.Close()
+	defer func() {
+		if err = dst.Close(); err != nil {
+			yaklog.Errorf("dst close failed : %v", err)
+		}
+	}()
 	_ = success(src)
 	yaklog.Infof("client [%s] connect to target host finished", src.RemoteAddr().String())
 	if err = forward(protocol, src, dst); err != nil {
 		yaklog.Errorf("client [%s] send to message to target host failed : %v", src.RemoteAddr().String(), err)
 	}
-	yaklog.Errorf("client [%s] send to message to target host fisished", src.RemoteAddr().String())
+	yaklog.Infof("client [%s] send to message to target host fisished", src.RemoteAddr().String())
 }

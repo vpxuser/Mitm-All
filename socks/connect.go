@@ -9,7 +9,6 @@ import (
 	"net"
 	"socks2https/pkg/comm"
 	"socks2https/setting"
-	"time"
 )
 
 // 客户端请求包
@@ -101,7 +100,7 @@ func connect(src net.Conn) (net.Conn, int, byte, error) {
 	port := (uint16(buf[0]) << 8) + uint16(buf[1])
 	addr := fmt.Sprintf("%s:%d", host, port)
 	yaklog.Debugf("target address : %s", comm.SetColor(comm.RED_COLOR_TYPE, addr))
-	dst, err := net.DialTimeout(PROTOCOL_TCP, addr, setting.Config.Socks.Target.Timeout*time.Second)
+	dst, err := net.DialTimeout(PROTOCOL_TCP, addr, setting.TargetTimeout)
 	if err != nil {
 		return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("connect to target host failed : %v", err)
 	}
@@ -109,7 +108,7 @@ func connect(src net.Conn) (net.Conn, int, byte, error) {
 	switch port {
 	case 443:
 		protocol = HTTPS_PROTOCOL
-		dst, err = netx.DialTCPTimeout(setting.Config.Socks.Target.Timeout*time.Second, addr, setting.Config.Socks.Proxy...)
+		dst, err = netx.DialTCPTimeout(setting.TargetTimeout, addr, setting.Proxy)
 		if err != nil {
 			return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("connect to target host failed : %v", err)
 		}
@@ -125,7 +124,7 @@ func failure(conn io.Writer, rep byte) error {
 }
 
 func success(conn net.Conn) error {
-	if !setting.Config.Socks.Bound {
+	if !setting.Bound {
 		_, err := conn.Write([]byte{SOCKS5_VERSION, SUCCEEDED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0})
 		return err
 	}

@@ -46,9 +46,10 @@ func handshake(conn net.Conn) error {
 	if _, err := io.ReadFull(conn, methods); err != nil {
 		return err
 	}
-	yaklog.Debugf("METHODS : %v", buf)
+	yaklog.Debugf("METHODS : %v", methods)
 	method := NO_ACCEPTABLE_METHOD
 	for _, method = range methods {
+		//yaklog.Debugf("client supprot mothod : %v", method)
 		if method == NO_AUTHENTICATION_REQUIRED_METHOD {
 			break
 		}

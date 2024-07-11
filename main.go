@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/kataras/golog"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"socks2https/setting"
 	"socks2https/socks"
@@ -11,7 +12,7 @@ const PROGRAM_NAME = "\n███████╗ ██████╗  ██�
 
 func init() {
 	fmt.Println(PROGRAM_NAME)
-	yaklog.SetLevel(setting.Config.Log.Level)
+	yaklog.SetLevel(golog.Level(setting.Level))
 }
 
 func main() {
