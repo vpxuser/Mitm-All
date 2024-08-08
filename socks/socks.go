@@ -19,7 +19,7 @@ func Run() {
 		yaklog.Fatalf("start socks server failed : %v", err)
 	}
 	yaklog.Infof("start server socks listen on [%s]", setting.Host)
-	yaklog.Infof("upstream proxy is : %s", setting.Proxy)
+	yaklog.Infof("downstream proxy is : %s", setting.Proxy)
 	for {
 		client, err := server.Accept()
 		if err != nil {
