@@ -32,21 +32,21 @@ const (
 
 // socks握手处理函数
 // 暂时只支持 未授权访问 方法
-func handshake(conn net.Conn) error {
+func handshake(tag string, conn net.Conn) error {
 	buf := make([]byte, 2)
 	if _, err := io.ReadFull(conn, buf); err != nil {
 		return err
 	}
 	ver, nMethods := buf[0], buf[1]
-	yaklog.Debugf("VER : %v , NMETHODS : %v", ver, nMethods)
+	yaklog.Debugf("%s VER : %v , NMETHODS : %v", tag, ver, nMethods)
 	if ver != SOCKS5_VERSION {
-		return fmt.Errorf("not support socks version")
+		return fmt.Errorf("%s not support socks version", tag)
 	}
 	methods := make([]byte, nMethods)
 	if _, err := io.ReadFull(conn, methods); err != nil {
 		return err
 	}
-	yaklog.Debugf("METHODS : %v", methods)
+	yaklog.Debugf("%s METHODS : %v", tag, methods)
 	method := NO_ACCEPTABLE_METHOD
 	for _, method = range methods {
 		//yaklog.Debugf("client supprot mothod : %v", method)
@@ -55,7 +55,9 @@ func handshake(conn net.Conn) error {
 		}
 	}
 	buf = []byte{SOCKS5_VERSION, method}
-	yaklog.Debugf("auth server message : %v", buf)
-	_, err := conn.Write(buf)
-	return err
+	yaklog.Debugf("%s socks auth response : %v", tag, buf)
+	if _, err := conn.Write(buf); err != nil {
+		return fmt.Errorf("%s send auth response to Client failed : %v", tag, err)
+	}
+	return nil
 }

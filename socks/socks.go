@@ -1,6 +1,8 @@
 package socks
 
 import (
+	"fmt"
+	"github.com/google/uuid"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
 	"socks2https/setting"
@@ -16,18 +18,23 @@ const (
 func Run() {
 	server, err := net.Listen(PROTOCOL_TCP, setting.Host)
 	if err != nil {
-		yaklog.Fatalf("start socks server failed : %v", err)
+		yaklog.Fatalf("start SOCKS server failed : %v", err)
 	}
-	yaklog.Infof("start server socks listen on [%s]", setting.Host)
-	yaklog.Infof("downstream proxy is : %s", setting.Proxy)
+	yaklog.Infof("start SOCKS server on [%s]", setting.Host)
+	yaklog.Infof("connect to HTTP proxy [%s]", setting.Proxy)
 	for {
+		clientId := uuid.New().String()
 		client, err := server.Accept()
 		if err != nil {
-			yaklog.Errorf("accept client connect failed : %v", err)
+			yaklog.Errorf("[%s] accept Client connection failed : %v", clientId, err)
 			continue
 		}
-		yaklog.Infof("recive client connect from [%s]", client.RemoteAddr().String())
-		_ = client.SetDeadline(time.Now().Add(setting.ClientTimeout))
-		go handler(client)
+		clientIP := client.RemoteAddr().String()
+		tag := fmt.Sprintf("[%s] [%s]", clientId, clientIP)
+		yaklog.Infof("%s accept Client connection", tag)
+		if err = client.SetDeadline(time.Now().Add(setting.ClientTimeout)); err != nil {
+			yaklog.Warnf("%s set Client deadline failed : %v", tag, err)
+		}
+		go handler(tag, client)
 	}
 }

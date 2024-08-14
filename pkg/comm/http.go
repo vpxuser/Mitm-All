@@ -24,7 +24,7 @@ func SendProxiedReq(proxyUrl string, req *http.Request) (*http.Response, error) 
 				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}).DialContext,
-			ForceAttemptHTTP2: true,
+			ForceAttemptHTTP2: false,
 		},
 	}
 	// 设置代理请求，URL 需要显示完整路径，即 URL = SCHEMA + HOST + PATH（默认已设置）
@@ -34,7 +34,7 @@ func SendProxiedReq(proxyUrl string, req *http.Request) (*http.Response, error) 
 	// 发送代理请求到代理服务器
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("revice response failed : %v", err)
+		return nil, fmt.Errorf("revice HTTP response failed : %v", err)
 	}
 	return resp, nil
 }

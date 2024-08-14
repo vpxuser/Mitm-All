@@ -52,21 +52,20 @@ const (
 )
 
 // 和远程服务器建立连接
-func connect(src net.Conn) (net.Conn, int, byte, error) {
+func connect(tag string, client net.Conn) (net.Conn, int, byte, error) {
 	protocol := TCP_PROTOCOL
 	buf := make([]byte, 4)
-	if _, err := io.ReadFull(src, buf); err != nil {
-		yaklog.Errorf("read [%s] header buf failed", src.RemoteAddr().String())
-		return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, err
+	if _, err := io.ReadFull(client, buf); err != nil {
+		return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, fmt.Errorf("%s read connect request header failed : %v", tag, err)
 	}
 	ver, cmd, rsv, aTyp := buf[0], buf[1], buf[2], buf[3]
-	yaklog.Debugf("VER : %v , CMD : %v , RSA : %v , ATYP : %v", ver, cmd, rsv, aTyp)
+	yaklog.Debugf("%s VER : %v , CMD : %v , RSA : %v , ATYP : %v", tag, ver, cmd, rsv, aTyp)
 	if ver != SOCKS5_VERSION {
-		return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, fmt.Errorf("not support socks version : %v", ver)
+		return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, fmt.Errorf("%s not support socks version : %v", tag, ver)
 	} else if cmd != CONNECT_CMD {
-		return nil, protocol, COMMAND_NOT_SUPPORTED_REP, fmt.Errorf("not support method : %v", cmd)
+		return nil, protocol, COMMAND_NOT_SUPPORTED_REP, fmt.Errorf("%s not support method : %v", tag, cmd)
 	} else if rsv != RESERVED {
-		return nil, protocol, CONNECTION_NOT_ALLOWED_REP, fmt.Errorf("nuknow reserved : %v", rsv)
+		return nil, protocol, CONNECTION_NOT_ALLOWED_REP, fmt.Errorf("%s nuknow reserved : %v", tag, rsv)
 	}
 	var host string
 	switch aTyp {
@@ -74,35 +73,35 @@ func connect(src net.Conn) (net.Conn, int, byte, error) {
 		buf = make([]byte, net.IPv6len)
 		fallthrough
 	case IPV4_ATYPE:
-		if _, err := io.ReadFull(src, buf); err != nil {
-			return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, fmt.Errorf("read [%s] ip address buf failed", src.RemoteAddr().String())
+		if _, err := io.ReadFull(client, buf); err != nil {
+			return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, fmt.Errorf("%s read Target IP address failed : %v", tag, err)
 		}
 		host = net.IP(buf).String()
 	case FQDN_ATYPE:
-		if _, err := io.ReadFull(src, buf[:1]); err != nil {
-			return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, fmt.Errorf("read [%s] fqdn address length buf failed", src.RemoteAddr().String())
+		if _, err := io.ReadFull(client, buf[:1]); err != nil {
+			return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, fmt.Errorf("%s read Target FQDN address length failed : %v", tag, err)
 		}
 		aLen := buf[0]
-		yaklog.Debugf("ALEN : %v", aLen)
+		yaklog.Debugf("%s ALEN : %v", tag, aLen)
 		if aLen > net.IPv4len {
 			buf = make([]byte, aLen)
 		}
-		if _, err := io.ReadFull(src, buf[:aLen]); err != nil {
-			return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, fmt.Errorf("read [%s] fqdn address buf failed", src.RemoteAddr().String())
+		if _, err := io.ReadFull(client, buf[:aLen]); err != nil {
+			return nil, protocol, GENERAL_SOCKS_SERVER_FAILURE_REP, fmt.Errorf("%s read Target FQDN fqdn address failed : %v", tag, err)
 		}
 		host = string(buf[:aLen])
 	default:
-		return nil, TCP_PROTOCOL, ADDRESS_TYPE_NOT_SUPPORTED_REP, fmt.Errorf("not support address type : %v", aTyp)
+		return nil, TCP_PROTOCOL, ADDRESS_TYPE_NOT_SUPPORTED_REP, fmt.Errorf("%s not support address type : %v", tag, aTyp)
 	}
-	if _, err := io.ReadFull(src, buf[:2]); err != nil {
-		return nil, TCP_PROTOCOL, ADDRESS_TYPE_NOT_SUPPORTED_REP, fmt.Errorf("read [%s] port buf failed", src.RemoteAddr().String())
+	if _, err := io.ReadFull(client, buf[:2]); err != nil {
+		return nil, TCP_PROTOCOL, ADDRESS_TYPE_NOT_SUPPORTED_REP, fmt.Errorf("%s read Target Port failed : %v", tag, err)
 	}
 	port := (uint16(buf[0]) << 8) + uint16(buf[1])
 	addr := fmt.Sprintf("%s:%d", host, port)
-	yaklog.Debugf("target address : %s", comm.SetColor(comm.RED_COLOR_TYPE, addr))
+	yaklog.Debugf("%s Target address [%s]", tag, comm.SetColor(comm.RED_COLOR_TYPE, addr))
 	dst, err := net.DialTimeout(PROTOCOL_TCP, addr, setting.TargetTimeout)
 	if err != nil {
-		return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("connect to target host failed : %v", err)
+		return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("%s connect to Target address failed : %v", tag, err)
 	}
 	//根据端口号判断协议类型
 	switch port {
@@ -110,30 +109,51 @@ func connect(src net.Conn) (net.Conn, int, byte, error) {
 		protocol = HTTPS_PROTOCOL
 		dst, err = netx.DialTCPTimeout(setting.TargetTimeout, addr, setting.Proxy)
 		if err != nil {
-			return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("connect to target host failed : %v", err)
+			return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("%s connect to HTTPS address failed : %v", tag, err)
 		}
 	case 80:
 		protocol = HTTP_PROTOCOL
 	}
+	//dst, err := net.DialTimeout(PROTOCOL_TCP, "127.0.0.1:8081", setting.TargetTimeout)
+	//if err != nil {
+	//	return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("connect to proxy host failed : %v", err)
+	//}
+	//// 构建 HTTP CONNECT 请求
+	//connectRequest := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", host, host)
+	//if _, err = dst.Write([]byte(connectRequest)); err != nil {
+	//	return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("send CONNECT request to HTTP proxy failed : %v", err)
+	//}
+	//// 读取 HTTP 代理服务器的响应
+	//resp, err := http.ReadResponse(bufio.NewReader(dst), nil)
+	//if err != nil {
+	//	return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("read HTTP proxy response failed : %v", err)
+	//}
+	//if resp.StatusCode != http.StatusOK {
+	//	return nil, protocol, CONNECTION_REFUSED_REP, fmt.Errorf("connect to HTTP proxy failed : %v", err)
+	//}
 	return dst, protocol, SUCCEEDED_REP, nil
 }
 
-func failure(conn io.Writer, rep byte) error {
-	_, err := conn.Write([]byte{SOCKS5_VERSION, rep, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0})
-	return err
+func failure(tag string, conn io.Writer, rep byte) error {
+	if _, err := conn.Write([]byte{SOCKS5_VERSION, rep, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+		return fmt.Errorf("%s send connect response to Client failed : %v", tag, err)
+	}
+	return nil
 }
 
-func success(conn net.Conn) error {
-	yaklog.Debugf("bound : %v", comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%v", setting.Bound)))
+func success(tag string, conn net.Conn) error {
+	//yaklog.Debugf("%s bound : %v", tag, comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%v", setting.Bound)))
 	if !setting.Bound {
-		yaklog.Info(comm.SetColor(comm.GREEN_COLOR_TYPE, "no need dns lookup"))
-		_, err := conn.Write([]byte{SOCKS5_VERSION, SUCCEEDED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0})
-		return err
+		//yaklog.Info(comm.SetColor(comm.GREEN_COLOR_TYPE, "no need dns lookup"))
+		if _, err := conn.Write([]byte{SOCKS5_VERSION, SUCCEEDED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+			return fmt.Errorf("%s send connect response to Client failed : %v", tag, err)
+		}
+		return nil
 	}
-	yaklog.Info(comm.SetColor(comm.RED_COLOR_TYPE, "need dns lookup"))
+	//yaklog.Info(comm.SetColor(comm.RED_COLOR_TYPE, "need dns lookup"))
 	addr, port, err := yakutils.ParseStringToHostPort(conn.LocalAddr().String())
 	if err != nil {
-		return err
+		return fmt.Errorf("%s parse Target Host and Port failed : %v", tag, err)
 	}
 	var host []byte
 	var aTyp, aLen byte
@@ -150,10 +170,12 @@ func success(conn net.Conn) error {
 	buf := make([]byte, 2)
 	buf[0] = byte(port >> 8)
 	buf[1] = byte(uint16(port) - uint16(buf[0])<<8)
+	resp := []byte{SOCKS5_VERSION, SUCCEEDED_REP, RESERVED, aTyp}
 	if aLen != 0 {
-		_, err = conn.Write(append(append([]byte{SOCKS5_VERSION, SUCCEEDED_REP, RESERVED, aTyp, aLen}, host...), buf...))
-		return err
+		resp = append(resp, aLen)
 	}
-	_, err = conn.Write(append(append([]byte{SOCKS5_VERSION, SUCCEEDED_REP, RESERVED, aTyp}, host...), buf...))
+	if _, err = conn.Write(append(append(resp, host...), buf...)); err != nil {
+		return fmt.Errorf("%s send connect response to Client failed : %v", tag, err)
+	}
 	return nil
 }
