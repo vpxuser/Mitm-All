@@ -5,6 +5,7 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
+	"socks2https/pkg/comm"
 )
 
 const (
@@ -20,99 +21,62 @@ const (
 	AUTHENTICATION_VERSION byte = 0x01
 	SUCCESS_AUTHENTICATION byte = 0x00
 	FAIL_AUTHENTICATION    byte = 0xff
-)
 
-var (
-	methodMap = map[byte]string{
-		NO_AUTHENTICATION_REQUIRED_METHOD: "NO_AUTHENTICATION_REQUIRED_METHOD",
-		GSSAPI_METHOD:                     "GSSAPI_METHOD",
-		USERNAME_PASSWORD_METHOD:          "USERNAME_PASSWORD_METHOD",
-		NO_ACCEPTABLE_METHOD:              "NO_ACCEPTABLE_METHOD",
-	}
-
-	unamepasswdMap = map[string]string{
-		"admin": "admin",
-	}
-
-	supportedMethods = USERNAME_PASSWORD_METHOD
+	AUTHENTICATION_SWITCH bool = false
 )
 
 // socks握手处理函数
 // 暂时只支持 未授权访问 方法
-func handshake(tag string, reader *bufio.Reader, conn net.Conn) error {
-	method, err := parseMethod(tag, reader)
-	if err != nil {
-		return err
-	}
-	if err = replyMethod(tag, method, conn); err != nil {
-		return err
-	}
-	switch method {
-	case NO_AUTHENTICATION_REQUIRED_METHOD:
-		break
-	case GSSAPI_METHOD:
-	case USERNAME_PASSWORD_METHOD:
-		status, err := parseUnamePasswd(tag, reader)
-		if err != nil {
-			return err
-		}
-		if err = replyUnamePass(tag, status, conn); err != nil {
-			return err
-		}
-		if status != SUCCESS_AUTHENTICATION {
-			_ = conn.Close()
-		}
-	case NO_ACCEPTABLE_METHOD:
-		_ = conn.Close()
-	}
-	return nil
-}
-
-// 客户端请求包
-// +----+----------+----------+
-// |VER | NMETHODS | METHODS  |
-// +----+----------+----------+
-// | 1  |    1     | 1 to 255 |
-// +----+----------+----------+
-
-func parseMethod(tag string, reader *bufio.Reader) (byte, error) {
+func handshake(tag string, readWriter *bufio.ReadWriter) error {
+	// 客户端请求包
+	// +----+----------+----------+
+	// |VER | NMETHODS | METHODS  |
+	// +----+----------+----------+
+	// | 1  |    1     | 1 to 255 |
+	// +----+----------+----------+
 	buf := make([]byte, 2)
-	if _, err := reader.Read(buf); err != nil {
-		return NO_ACCEPTABLE_METHOD, fmt.Errorf("%s read VER and NMETHODS failed : %v", tag, err)
+	if _, err := readWriter.Read(buf); err != nil {
+		return fmt.Errorf("%s read VER and NMETHODS failed : %v", tag, err)
 	}
 	ver, nMethods := buf[0], buf[1]
 	yaklog.Debugf("%s VER : %v , NMETHODS : %v", tag, ver, nMethods)
 	if ver != SOCKS5_VERSION {
-		return NO_ACCEPTABLE_METHOD, fmt.Errorf("%s not support socks version", tag)
+		return fmt.Errorf("%s unsupport SOCKS version : %d", tag, ver)
 	}
 	methods := make([]byte, nMethods)
-	if _, err := reader.Read(methods); err != nil {
-		return NO_ACCEPTABLE_METHOD, fmt.Errorf("%s read METHODS failed : %v", tag, err)
+	if _, err := readWriter.Read(methods); err != nil {
+		return fmt.Errorf("%s read METHODS failed : %v", tag, err)
 	}
-	sMethods := make([]string, len(methods))
-	for i, method := range methods {
-		sMethods[i] = methodMap[method]
-		if method == supportedMethods {
-			yaklog.Debugf("%s METHODS : %v", tag, sMethods)
-			return supportedMethods, nil
+	yaklog.Debugf("%s METHODS : %v", tag, methods)
+	var method byte
+	for _, method = range methods {
+		switch method {
+		case NO_AUTHENTICATION_REQUIRED_METHOD:
+			break
+		case USERNAME_PASSWORD_METHOD:
+			if AUTHENTICATION_SWITCH {
+				break
+			}
+			fallthrough
+		default:
+			method = NO_ACCEPTABLE_METHOD
 		}
 	}
-	yaklog.Debugf("%s METHODS : %v", tag, sMethods)
-	return NO_ACCEPTABLE_METHOD, nil
-}
-
-// 服务端响应包
-// +----+--------+
-// |VER | METHOD |
-// +----+--------+
-// | 1  |    1   |
-// +----+--------+
-
-func replyMethod(tag string, method byte, conn net.Conn) error {
-	buf := []byte{SOCKS5_VERSION, method}
-	yaklog.Debugf("%s send method response : %v", tag, buf)
-	if _, err := conn.Write(buf); err != nil {
-		return fmt.Errorf("%s send method response to Client failed : %v", tag, err)
+	yaklog.Infof("%s receive Client handshake data : %s", tag, comm.SetColor(comm.GREEN_COLOR_TYPE, fmt.Sprintf("%v", append(buf, methods...))))
+	// 服务端响应包
+	// +----+--------+
+	// |VER | METHOD |
+	// +----+--------+
+	// | 1  |    1   |
+	// +----+--------+
+	if _, err := readWriter.Write([]byte{SOCKS5_VERSION, method}); err != nil {
+		return fmt.Errorf("%s send handshake data to Client failed : %v", tag, err)
+	} else if err = readWriter.Flush(); err != nil {
+		return fmt.Errorf("%s flush handshake data failed : %v", tag, err)
+	} else if method == NO_ACCEPTABLE_METHOD {
+		return fmt.Errorf("%s not supported handshake methods", tag)
+	} else if AUTHENTICATION_SWITCH {
+		//todo
 	}
 	return nil
 }
@@ -146,7 +110,7 @@ func parseUnamePasswd(tag string, reader *bufio.Reader) (byte, error) {
 	if _, err = reader.Read(passwd); err != nil {
 		return FAIL_AUTHENTICATION, fmt.Errorf("%s read PASSWD failed : %v", tag, err)
 	}
-	if string(passwd) == unamepasswdMap[string(uname)] {
+	if string(passwd) == "admin" && string(uname) == "admin" {
 		return SUCCESS_AUTHENTICATION, nil
 	}
 	return FAIL_AUTHENTICATION, nil
