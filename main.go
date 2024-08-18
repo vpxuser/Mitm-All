@@ -18,6 +18,6 @@ func init() {
 
 func main() {
 	go socks.Run()
-	go tsocks.Run(10800, 2, false)
+	go tsocks.Run(10800, 2, true)
 	select {}
 }

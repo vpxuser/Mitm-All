@@ -381,7 +381,7 @@ func connectReadWriter(tag string, readWriter *bufio.ReadWriter) (net.Conn, erro
 		err    error
 	)
 	if ProxySwitch {
-		server, err = netx.DialTimeout(setting.TargetTimeout, addr)
+		server, err = netx.DialTimeout(setting.TargetTimeout, addr, setting.Proxy)
 		yaklog.Infof("%s %s", tag, comm.SetColor(comm.YELLOW_BG_COLOR_TYPE, comm.SetColor(comm.GREEN_COLOR_TYPE, "use proxy server")))
 	} else {
 		server, err = net.DialTimeout(PROTOCOL_TCP, addr, setting.TargetTimeout)
@@ -394,6 +394,6 @@ func connectReadWriter(tag string, readWriter *bufio.ReadWriter) (net.Conn, erro
 		readWriter.Flush()
 		return nil, fmt.Errorf("%s connect to Server failed : %v", tag, err)
 	}
-	//readWriter.Flush()
+	readWriter.Flush()
 	return server, nil
 }
