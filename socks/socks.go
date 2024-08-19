@@ -14,6 +14,8 @@ const (
 	PROTOCOL_HTTP = "http"
 )
 
+var Tag string
+
 // Run 启动socks5代理服务器
 func Run() {
 	server, err := net.Listen(PROTOCOL_TCP, setting.Host)
@@ -30,11 +32,11 @@ func Run() {
 			continue
 		}
 		clientIP := client.RemoteAddr().String()
-		tag := fmt.Sprintf("[%s] [%s]", clientId, clientIP)
-		yaklog.Infof("%s accept Client connection", tag)
+		Tag = fmt.Sprintf("[%s] [%s]", clientId, clientIP)
+		yaklog.Infof("%s accept Client connection", Tag)
 		if err = client.SetDeadline(time.Now().Add(setting.ClientTimeout)); err != nil {
-			yaklog.Warnf("%s set Client deadline failed : %v", tag, err)
+			yaklog.Warnf("%s set Client deadline failed : %v", Tag, err)
 		}
-		go handler(tag, client)
+		go handler(client)
 	}
 }

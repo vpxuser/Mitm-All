@@ -27,7 +27,7 @@ const (
 
 // socks握手处理函数
 // 暂时只支持 未授权访问 方法
-func handshake(tag string, readWriter *bufio.ReadWriter) error {
+func handshake(conn net.Conn) error {
 	// 客户端请求包
 	// +----+----------+----------+
 	// |VER | NMETHODS | METHODS  |
@@ -35,19 +35,19 @@ func handshake(tag string, readWriter *bufio.ReadWriter) error {
 	// | 1  |    1     | 1 to 255 |
 	// +----+----------+----------+
 	buf := make([]byte, 2)
-	if _, err := readWriter.Read(buf); err != nil {
-		return fmt.Errorf("%s read VER and NMETHODS failed : %v", tag, err)
+	if _, err := conn.Read(buf); err != nil {
+		return fmt.Errorf("read VER and NMETHODS failed : %v", err)
 	}
 	ver, nMethods := buf[0], buf[1]
-	yaklog.Debugf("%s VER : %v , NMETHODS : %v", tag, ver, nMethods)
+	yaklog.Debugf("VER : %v , NMETHODS : %v", ver, nMethods)
 	if ver != SOCKS5_VERSION {
-		return fmt.Errorf("%s unsupport SOCKS version : %d", tag, ver)
+		return fmt.Errorf("unsupport SOCKS version : %d", ver)
 	}
 	methods := make([]byte, nMethods)
-	if _, err := readWriter.Read(methods); err != nil {
-		return fmt.Errorf("%s read METHODS failed : %v", tag, err)
+	if _, err := conn.Read(methods); err != nil {
+		return fmt.Errorf("read METHODS failed : %v", err)
 	}
-	yaklog.Debugf("%s METHODS : %v", tag, methods)
+	yaklog.Debugf("METHODS : %v", methods)
 	var method byte
 	for _, method = range methods {
 		switch method {
@@ -62,19 +62,17 @@ func handshake(tag string, readWriter *bufio.ReadWriter) error {
 			method = NO_ACCEPTABLE_METHOD
 		}
 	}
-	yaklog.Infof("%s receive Client handshake data : %s", tag, comm.SetColor(comm.GREEN_COLOR_TYPE, fmt.Sprintf("%v", append(buf, methods...))))
+	yaklog.Infof("receive Client handshake data : %s", comm.SetColor(comm.GREEN_COLOR_TYPE, fmt.Sprintf("%v", append(buf, methods...))))
 	// 服务端响应包
 	// +----+--------+
 	// |VER | METHOD |
 	// +----+--------+
 	// | 1  |    1   |
 	// +----+--------+
-	if _, err := readWriter.Write([]byte{SOCKS5_VERSION, method}); err != nil {
-		return fmt.Errorf("%s send handshake data to Client failed : %v", tag, err)
-	} else if err = readWriter.Flush(); err != nil {
-		return fmt.Errorf("%s flush handshake data failed : %v", tag, err)
+	if _, err := conn.Write([]byte{SOCKS5_VERSION, method}); err != nil {
+		return fmt.Errorf("send handshake data to Client failed : %v", err)
 	} else if method == NO_ACCEPTABLE_METHOD {
-		return fmt.Errorf("%s not supported handshake methods", tag)
+		return fmt.Errorf("not supported handshake methods")
 	} else if AUTHENTICATION_SWITCH {
 		//todo
 	}

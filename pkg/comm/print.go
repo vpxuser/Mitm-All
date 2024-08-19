@@ -39,21 +39,21 @@ func SetColor(colorType int, payload string) string {
 }
 
 // DumpRequest 打印更美观的 request 信息
-func DumpRequest(req *http.Request) {
-	dump, err := httputil.DumpRequest(req, true)
+func DumpRequest(req *http.Request, displayBody bool, colorType int) {
+	dump, err := httputil.DumpRequest(req, displayBody)
 	if err != nil {
 		yaklog.Errorf("dump request failed : %v", err)
 		return
 	}
-	yaklog.Debugf("dump request : \n%s", SetColor(BLUE_COLOR_TYPE, string(dump)))
+	yaklog.Debugf("dump request : \n%s", SetColor(colorType, string(dump)))
 }
 
 // DumpResponse 打印更美观的 response 信息
-func DumpResponse(resp *http.Response) {
-	dump, err := httputil.DumpResponse(resp, true)
+func DumpResponse(resp *http.Response, displayBody bool, colorType int) {
+	dump, err := httputil.DumpResponse(resp, displayBody)
 	if err != nil {
 		yaklog.Errorf("dump response failed : %v", err)
 		return
 	}
-	yaklog.Debugf("dump response : \n%s", SetColor(BLUE_COLOR_TYPE, string(dump)))
+	yaklog.Debugf("dump response : \n%s", SetColor(colorType, string(dump)))
 }

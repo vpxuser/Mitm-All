@@ -86,12 +86,15 @@ func forwardReadWriter(tag string, readWriter *bufio.ReadWriter, client, server 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
+		_, _ = parseTLSRecord(readWriter.Reader)
+		_, _ = parseTLSHandshake(readWriter.Reader)
 		if _, err := readWriter.WriteTo(server); err != nil && err != io.EOF {
 			yaklog.Warnf("%s write data to Target failed: %v", tag, err)
 		}
 	}()
 	go func() {
 		defer wg.Done()
+		//_, _ = parseTLSHandshake(bufio.NewReader(server))
 		if _, err := readWriter.ReadFrom(server); err != nil && err != io.EOF {
 			yaklog.Warnf("%s write data to Client failed: %v", tag, err)
 		}

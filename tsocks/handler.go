@@ -60,22 +60,10 @@ func handlerReadWriter(tag string, client net.Conn) {
 		return
 	}
 	yaklog.Infof("%s finish socks command", tag)
-	protocol, err := parseProtocol(tag, readWriter)
+	_, err = parseProtocol(tag, readWriter)
 	if err != nil {
 		yaklog.Error(err)
 		return
-	}
-	switch protocol {
-	//case TCP_PROTOCOL, HTTP_PROTOCOL:
-	//	break
-	//default:
-	//	addr := server.RemoteAddr().String()
-	//	server.Close()
-	//	server, err = netx.DialTimeout(setting.TargetTimeout, addr, setting.Proxy)
-	//	if err != nil {
-	//		yaklog.Errorf("%s create proxy connection failed : %v", tag, err)
-	//		return
-	//	}
 	}
 	if err = forwardReadWriter(tag, readWriter, client, server); err != nil {
 		yaklog.Error(err)

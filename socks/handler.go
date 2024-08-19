@@ -1,29 +1,29 @@
 package socks
 
 import (
-	"bufio"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
 )
 
-func handler(tag string, client net.Conn) {
-	readWriter := bufio.NewReadWriter(bufio.NewReader(client), bufio.NewWriter(client))
-	if err := handshake(tag, readWriter); err != nil {
-		yaklog.Error(err)
+func handler(client net.Conn) {
+	if err := handshake(client); err != nil {
+		yaklog.Errorf("%s %v", Tag, err)
 		return
 	}
-	yaklog.Infof("%s finish socks handshake", tag)
-	cmd, addr, err := runcmd(tag, readWriter)
+	yaklog.Infof("%s finish socks handshake", Tag)
+	cmd, addr, err := runcmd(client)
 	if err != nil {
-		yaklog.Error(err)
+		yaklog.Errorf("%s %v", Tag, err)
 		return
 	}
-	yaklog.Infof("%s finish socks command", tag)
+	yaklog.Infof("%s finish socks command", Tag)
 	if cmd != CONNECT_CMD {
+		yaklog.Warnf("%s not support CMD : %d", Tag, cmd)
 		return
 	}
-	if err = connect(tag, readWriter, client, addr); err != nil {
+	if err = connect(client, addr); err != nil {
 		yaklog.Error(err)
+		return
 	}
-	yaklog.Infof("%s connection transfer fisished", tag)
+	yaklog.Infof("%s connection transfer fisished", Tag)
 }

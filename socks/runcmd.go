@@ -1,7 +1,6 @@
 package socks
 
 import (
-	"bufio"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
@@ -35,7 +34,7 @@ const (
 	ADDRESS_TYPE_NOT_SUPPORTED_REP   byte = 0x08
 )
 
-func runcmd(tag string, readWriter *bufio.ReadWriter) (byte, string, error) {
+func runcmd(conn net.Conn) (byte, string, error) {
 	// 客户端请求包
 	// +-----+-----+-------+------+----------+----------+
 	// | VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
@@ -43,32 +42,26 @@ func runcmd(tag string, readWriter *bufio.ReadWriter) (byte, string, error) {
 	// |  1  |  1  | X'00' |  1   | Variable |    2     |
 	// +-----+-----+-------+------+----------+----------+
 	buf := make([]byte, 4)
-	if _, err := readWriter.Read(buf); err != nil {
-		return CONNECT_CMD, "", fmt.Errorf("%s read VER CMD RSV ATYP failed : %v", tag, err)
+	if _, err := conn.Read(buf); err != nil {
+		return CONNECT_CMD, "", fmt.Errorf("read VER CMD RSV ATYP failed : %v", err)
 	}
 	ver, cmd, rsv, aTyp := buf[0], buf[1], buf[2], buf[3]
-	yaklog.Debugf("%s VER : %v , CMD : %v , RSA : %v , ATYP : %v", tag, ver, cmd, rsv, aTyp)
+	yaklog.Debugf("%s VER : %v , CMD : %v , RSA : %v , ATYP : %v", Tag, ver, cmd, rsv, aTyp)
 	if ver != SOCKS5_VERSION {
-		if _, err := readWriter.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-		} else if err = readWriter.Flush(); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+		if _, err := conn.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+			return CONNECT_CMD, "", fmt.Errorf("write cmd to Client failed : %v", err)
 		}
-		return CONNECT_CMD, "", fmt.Errorf("%s not support socks version : %v", tag, ver)
+		return CONNECT_CMD, "", fmt.Errorf("not support socks version : %v", ver)
 	} else if cmd != CONNECT_CMD {
-		if _, err := readWriter.Write([]byte{SOCKS5_VERSION, COMMAND_NOT_SUPPORTED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-		} else if err = readWriter.Flush(); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+		if _, err := conn.Write([]byte{SOCKS5_VERSION, COMMAND_NOT_SUPPORTED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+			return CONNECT_CMD, "", fmt.Errorf("write cmd to Client failed : %v", err)
 		}
-		return CONNECT_CMD, "", fmt.Errorf("%s not support command : %v", tag, cmd)
+		return CONNECT_CMD, "", fmt.Errorf("not support command : %v", cmd)
 	} else if rsv != RESERVED {
-		if _, err := readWriter.Write([]byte{SOCKS5_VERSION, CONNECTION_NOT_ALLOWED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-		} else if err = readWriter.Flush(); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+		if _, err := conn.Write([]byte{SOCKS5_VERSION, CONNECTION_NOT_ALLOWED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+			return CONNECT_CMD, "", fmt.Errorf("write cmd to Client failed : %v", err)
 		}
-		return CONNECT_CMD, "", fmt.Errorf("%s invail reserved : %v", tag, rsv)
+		return CONNECT_CMD, "", fmt.Errorf("invail reserved : %v", rsv)
 	}
 	var host string
 	var aLen byte = 0x00
@@ -77,57 +70,47 @@ func runcmd(tag string, readWriter *bufio.ReadWriter) (byte, string, error) {
 		buf = make([]byte, net.IPv6len)
 		fallthrough
 	case IPV4_ATYPE:
-		if _, err := readWriter.Read(buf); err != nil {
-			if _, err = readWriter.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
-				return CONNECT_CMD, "", fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-			} else if err = readWriter.Flush(); err != nil {
-				return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+		if _, err := conn.Read(buf); err != nil {
+			if _, err = conn.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+				return CONNECT_CMD, "", fmt.Errorf("write cmd to Client failed : %v", err)
 			}
-			return CONNECT_CMD, "", fmt.Errorf("%s read Target IP failed : %v", tag, err)
+			return CONNECT_CMD, "", fmt.Errorf("read Target IP failed : %v", err)
 		}
 		host = net.IP(buf).String()
 	case FQDN_ATYPE:
-		if _, err := readWriter.Read(buf[:1]); err != nil {
-			if _, err = readWriter.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
-				return CONNECT_CMD, "", fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-			} else if err = readWriter.Flush(); err != nil {
-				return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+		if _, err := conn.Read(buf[:1]); err != nil {
+			if _, err = conn.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+				return CONNECT_CMD, "", fmt.Errorf("write cmd to Client failed : %v", err)
 			}
-			return CONNECT_CMD, "", fmt.Errorf("%s read ALEN failed : %v", tag, err)
+			return CONNECT_CMD, "", fmt.Errorf("read ALEN failed : %v", err)
 		}
 		aLen = buf[0]
-		yaklog.Debugf("%s ALEN : %v", tag, aLen)
+		yaklog.Debugf("%s ALEN : %v", Tag, aLen)
 		if aLen > net.IPv4len {
 			buf = make([]byte, aLen)
 		}
-		if _, err := readWriter.Read(buf[:aLen]); err != nil {
-			if _, err = readWriter.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
-				return CONNECT_CMD, "", fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-			} else if err = readWriter.Flush(); err != nil {
-				return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+		if _, err := conn.Read(buf[:aLen]); err != nil {
+			if _, err = conn.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+				return CONNECT_CMD, "", fmt.Errorf("write cmd to Client failed : %v", err)
 			}
-			return CONNECT_CMD, "", fmt.Errorf("%s read Target FQDN failed : %v", tag, err)
+			return CONNECT_CMD, "", fmt.Errorf("read Target FQDN failed : %v", err)
 		}
 		host = string(buf[:aLen])
 	default:
-		if _, err := readWriter.Write([]byte{SOCKS5_VERSION, ADDRESS_TYPE_NOT_SUPPORTED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-		} else if err = readWriter.Flush(); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+		if _, err := conn.Write([]byte{SOCKS5_VERSION, ADDRESS_TYPE_NOT_SUPPORTED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+			return CONNECT_CMD, "", fmt.Errorf("write cmd to Client failed : %v", err)
 		}
-		return CONNECT_CMD, "", fmt.Errorf("%s not support address type : %v", tag, aTyp)
+		return CONNECT_CMD, "", fmt.Errorf("not support address type : %v", aTyp)
 	}
-	if _, err := readWriter.Read(buf[:2]); err != nil {
-		if _, err = readWriter.Write([]byte{SOCKS5_VERSION, ADDRESS_TYPE_NOT_SUPPORTED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-		} else if err = readWriter.Flush(); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+	if _, err := conn.Read(buf[:2]); err != nil {
+		if _, err = conn.Write([]byte{SOCKS5_VERSION, ADDRESS_TYPE_NOT_SUPPORTED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
+			return CONNECT_CMD, "", fmt.Errorf("write cmd to Client failed : %v", err)
 		}
-		return CONNECT_CMD, host, fmt.Errorf("%s read Target Port failed : %v", tag, err)
+		return CONNECT_CMD, host, fmt.Errorf("read Target Port failed : %v", err)
 	}
 	port := (uint16(buf[0]) << 8) + uint16(buf[1])
 	addr := fmt.Sprintf("%s:%d", host, port)
-	yaklog.Infof("%s Target address : %s", tag, comm.SetColor(comm.GREEN_COLOR_TYPE, addr))
+	yaklog.Infof("%s Target address : %s", Tag, comm.SetColor(comm.GREEN_COLOR_TYPE, addr))
 	// 服务端响应包
 	// +-----+-----+-------+------+----------+----------+
 	// | VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
@@ -140,17 +123,13 @@ func runcmd(tag string, readWriter *bufio.ReadWriter) (byte, string, error) {
 		if aLen != 0x00 {
 			resp = append(resp, aLen)
 		}
-		if _, err := readWriter.Write(append(append(resp, host...), buf[:2]...)); err != nil {
-			return CONNECT_CMD, addr, fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-		} else if err = readWriter.Flush(); err != nil {
-			return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+		if _, err := conn.Write(append(append(resp, host...), buf[:2]...)); err != nil {
+			return CONNECT_CMD, addr, fmt.Errorf("write cmd to Client failed : %v", err)
 		}
 		return CONNECT_CMD, addr, nil
 	}
-	if _, err := readWriter.Write(append(resp, IPV4_ATYPE, 0, 0, 0, 0, 0, 0)); err != nil {
-		return CONNECT_CMD, addr, fmt.Errorf("%s write cmd to Client failed : %v", tag, err)
-	} else if err = readWriter.Flush(); err != nil {
-		return CONNECT_CMD, "", fmt.Errorf("%s flush cmd failed : %v", tag, err)
+	if _, err := conn.Write(append(resp, IPV4_ATYPE, 0, 0, 0, 0, 0, 0)); err != nil {
+		return CONNECT_CMD, addr, fmt.Errorf("write cmd to Client failed : %v", err)
 	}
 	return CONNECT_CMD, addr, nil
 }
