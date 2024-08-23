@@ -27,7 +27,7 @@ const (
 
 // socks握手处理函数
 // 暂时只支持 未授权访问 方法
-func handshake(conn net.Conn) error {
+func Handshake(conn net.Conn) error {
 	// 客户端请求包
 	// +----+----------+----------+
 	// |VER | NMETHODS | METHODS  |

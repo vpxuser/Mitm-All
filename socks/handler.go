@@ -5,8 +5,8 @@ import (
 	"net"
 )
 
-func handler(client net.Conn) {
-	if err := handshake(client); err != nil {
+func Handler(client net.Conn) {
+	if err := Handshake(client); err != nil {
 		yaklog.Errorf("%s %v", Tag, err)
 		return
 	}

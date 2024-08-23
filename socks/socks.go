@@ -16,6 +16,47 @@ const (
 
 var Tag string
 
+type MitmSocks struct {
+	Tag   string
+	Host  string
+	Port  uint16
+	Proxy struct {
+		Host string
+		Port uint16
+	}
+	Cert string
+	Key  string
+}
+
+func Fastboot() {
+	defaultConfig := &MitmSocks{
+		Host: "0.0.0.0",
+		Port: 1080,
+		Cert: "config/ca.cert",
+		Key:  "config/ca.key",
+	}
+	defaultAddr := fmt.Sprintf("%s:%d", defaultConfig.Host, defaultConfig.Port)
+	server, err := net.Listen("tcp", defaultAddr)
+	if err != nil {
+		yaklog.Fatalf("SOCKS Server start failed : %v", err)
+	}
+	yaklog.Infof("SOCKS Server start on [%s]", defaultAddr)
+	for {
+		defaultConfig.Tag = fmt.Sprintf("[%s]", uuid.New().String())
+		client, err := server.Accept()
+		if err != nil {
+			yaklog.Errorf("%s accept Client connection failed : %v", defaultConfig.Tag, err)
+			continue
+		}
+		defaultConfig.Tag = fmt.Sprintf("[%s] %s", client.RemoteAddr().String(), defaultConfig.Tag)
+		yaklog.Infof("%s accept Client connection", defaultConfig.Tag)
+		if err = client.SetDeadline(time.Now().Add(setting.ClientTimeout)); err != nil {
+			yaklog.Warnf("%s set Client deadline failed : %v", defaultConfig.Tag, err)
+		}
+		go Handler(client)
+	}
+}
+
 // Run 启动socks5代理服务器
 func Run() {
 	server, err := net.Listen(PROTOCOL_TCP, setting.Host)
@@ -37,6 +78,6 @@ func Run() {
 		if err = client.SetDeadline(time.Now().Add(setting.ClientTimeout)); err != nil {
 			yaklog.Warnf("%s set Client deadline failed : %v", Tag, err)
 		}
-		go handler(client)
+		go Handler(client)
 	}
 }

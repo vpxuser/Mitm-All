@@ -15,16 +15,19 @@ const (
 	BLUE_COLOR_TYPE
 	GREEN_COLOR_TYPE
 	WHITE_COLOR_TYPE
+	MAGENTA_COLOR_TYPE
+
 	RED_BG_COLOR_TYPE
 	YELLOW_BG_COLOR_TYPE
 )
 
 var colorMap = map[int]func(arg interface{}) aurora.Value{
-	RED_COLOR_TYPE:    aurora.BrightRed,
-	YELLOW_COLOR_TYPE: aurora.BrightYellow,
-	BLUE_COLOR_TYPE:   aurora.BrightBlue,
-	GREEN_COLOR_TYPE:  aurora.BrightGreen,
-	WHITE_COLOR_TYPE:  aurora.BrightWhite,
+	RED_COLOR_TYPE:     aurora.BrightRed,
+	YELLOW_COLOR_TYPE:  aurora.BrightYellow,
+	BLUE_COLOR_TYPE:    aurora.BrightBlue,
+	GREEN_COLOR_TYPE:   aurora.BrightGreen,
+	WHITE_COLOR_TYPE:   aurora.BrightWhite,
+	MAGENTA_COLOR_TYPE: aurora.BrightMagenta,
 
 	RED_BG_COLOR_TYPE:    aurora.BgBrightRed,
 	YELLOW_BG_COLOR_TYPE: aurora.BgBrightYellow,
