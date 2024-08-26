@@ -1,4 +1,4 @@
-package mitm
+package socks
 
 import (
 	"bufio"
@@ -10,8 +10,9 @@ import (
 	"sync"
 )
 
-func TCPMITM(reader *bufio.Reader, conn net.Conn, addr string) error {
+func TCPMITM(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
 	defer conn.Close()
+	addr := fmt.Sprintf("%s:%d", ctx.Host, ctx.Port)
 	dst, err := net.DialTimeout("tcp", addr, setting.TargetTimeout)
 	if err != nil {
 		return fmt.Errorf("connect to [%s] failed : %v", addr, err)

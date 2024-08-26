@@ -1,4 +1,4 @@
-package mitm
+package socks
 
 import (
 	"bufio"
@@ -14,8 +14,9 @@ import (
 	"sync"
 )
 
-func TLSMITM(reader *bufio.Reader, client net.Conn, addr string) error {
+func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) error {
 	defer client.Close()
+	addr := fmt.Sprintf("%s:%d", ctx.Host, ctx.Port)
 	target, err := net.DialTimeout("tcp", addr, setting.TargetTimeout)
 	if err != nil {
 		return fmt.Errorf("connect to [%s] failed : %v", addr, err)
@@ -27,22 +28,22 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, addr string) error {
 	go func() {
 		defer wg.Done()
 		recordLog := fmt.Sprintf("[%s ==> %s]", client.RemoteAddr().String(), target.RemoteAddr().String())
-		if err = ReadTLSRecord(reader, client, target, true); err != nil {
-			yaklog.Errorf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%s %v", recordLog, err)))
+		if err = ReadTLSRecord(reader, client, target, true, ctx); err != nil {
+			yaklog.Errorf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%s %s %v", ctx.GetClientId(), recordLog, err)))
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		recordLog := fmt.Sprintf("[%s ==> %s]", target.RemoteAddr().String(), client.RemoteAddr().String())
-		if err = ReadTLSRecord(bufio.NewReader(target), target, client, false); err != nil {
-			yaklog.Errorf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%s %v", recordLog, err)))
+		if err = ReadTLSRecord(bufio.NewReader(target), target, client, false, ctx); err != nil {
+			yaklog.Errorf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%s %s %v", ctx.GetClientId(), recordLog, err)))
 		}
 	}()
 	return nil
 }
 
-func ReadTLSRecord(reader *bufio.Reader, src, dst net.Conn, hijackSwitch bool) error {
-	connectLog := fmt.Sprintf("[%s ==> %s]", src.RemoteAddr().String(), dst.RemoteAddr().String())
+func ReadTLSRecord(reader *bufio.Reader, src, dst net.Conn, hijackSwitch bool, ctx *Context) error {
+	connectLog := fmt.Sprintf("%s [%s ==> %s]", ctx.GetClientId(), src.RemoteAddr().String(), dst.RemoteAddr().String())
 	domain := ""
 	for {
 		recordHeader := make([]byte, 5)
@@ -82,14 +83,30 @@ func ReadTLSRecord(reader *bufio.Reader, src, dst net.Conn, hijackSwitch bool) e
 					break
 				}
 				domain = clientHello.GetSNI()
+				ctx.SetDomain(domain)
 				yaklog.Debugf("%s , SNI : %s", handshakeLog, comm.SetColor(comm.YELLOW_BG_COLOR_TYPE, comm.SetColor(comm.RED_COLOR_TYPE, domain)))
 				//todo
+				ctx.SetClientHello(clientHello)
+			case protocol.MessageTypeServerHello:
+				serverHello, err := protocol.NewServerHello(ctx.GetClientHello())
+				if err != nil {
+					return err
+				}
+				record = serverHello.GetRaw()
+				yaklog.Debugf("%s , ServerHello Length : %d", handshakeLog, serverHello.Length)
+				yaklog.Debugf("%s , ServerHello Raw : %v", handshakeLog, record)
 			case protocol.MessageTypeCertificate:
+				domain = ctx.GetDomain()
+				if domain == "" {
+					break
+				}
 				certificate, err := protocol.NewCertificate(cert.CertificateAndPrivateKeyPath, domain)
 				if err != nil {
 					return err
 				}
 				record = certificate.GetRaw()
+			case protocol.MessageTypeServerHelloDone:
+				record = protocol.NewServerHelloDone().GetRaw()
 				//todo
 			default:
 				yaklog.Debugf(handshakeLog)
@@ -117,83 +134,3 @@ func ReadTLSRecord(reader *bufio.Reader, src, dst net.Conn, hijackSwitch bool) e
 		//}
 	}
 }
-
-func HijackTLSRecord(src, dst net.Conn, data []byte, hijackSwitch bool) error {
-	if hijackSwitch {
-		record, err := protocol.ParseTLSRecordLayer(data)
-		if err != nil {
-			return err
-		}
-		switch record.ContentType {
-		case protocol.ContentTypeHandshake:
-			switch record.TLSHandshakeMessage.MessageType {
-			case protocol.MessageTypeClientHello:
-				clientHello := record.TLSHandshakeMessage.ClientHello
-				serverHello, err := protocol.GenrateServerHelloRaw(&clientHello)
-				if err != nil {
-					return err
-				}
-				if _, err := src.Write(serverHello); err != nil {
-					return fmt.Errorf("write ServerHello failed : %v", err)
-				}
-			}
-			fallthrough
-		default:
-			if _, err := dst.Write(data); err != nil {
-				return fmt.Errorf("write TLS Record Header failed : %v", err)
-			}
-		}
-	}
-	return nil
-}
-
-//func HttpsMITM(hostName, addr string, reader *bufio.Reader, client net.Conn, record []byte) error {
-//	if _, err := client.Write(record); err != nil {
-//		return fmt.Errorf("write ServerHello to Client failed : %v", err)
-//	}
-//	return nil
-//	//defer client.Close()
-//	// 拦截客户端的 ClientHello，解析出 SNI（目标域名）
-//	caCert, err := cert.GetCACertificate("config/yak.crt")
-//	if err != nil {
-//		return err
-//	}
-//	rootCAs, err := cert.GetRootCAs(caCert)
-//	if err != nil {
-//		return err
-//	}
-//	caKey, err := cert.GetCAPrivateKey("config/yak.key")
-//	if err != nil {
-//		return err
-//	}
-//	mitmCert, err := cert.GenerateMITMCertificate(hostName, caCert, caKey)
-//	if err != nil {
-//		return err
-//	}
-//
-//	tlsClient := tls.Server(client, &tls.Config{
-//		RootCAs:            rootCAs,
-//		Certificates:       []tls.Certificate{*mitmCert},
-//		InsecureSkipVerify: true,
-//		ServerName:         hostName,
-//	})
-//	//if _, err = bytes.NewReader(record).WriteTo(tlsClient); err != nil && err != io.EOF {
-//	//	return fmt.Errorf("write TLS Record to TLS Client failed : %v", err)
-//	//}
-//
-//	if _, err = io.Copy(tlsClient, reader); err != nil {
-//		return fmt.Errorf("write TLS Record to TLS Client failed : %v", err)
-//	}
-//
-//	if err = tlsClient.Handshake(); err != nil {
-//		yaklog.Errorf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("TLS Handshake failed : %v", err)))
-//		return fmt.Errorf("TLS Handshake failed : %v", err)
-//	}
-//	req, err := http.ReadRequest(bufio.NewReader(tlsClient))
-//	if err != nil {
-//		yaklog.Errorf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("read Request failed : %v", err)))
-//		return fmt.Errorf("read Request failed : %v", err)
-//	}
-//	comm.DumpRequest(req, true, comm.RED_COLOR_TYPE)
-//	return nil
-//}

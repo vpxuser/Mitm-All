@@ -5,25 +5,26 @@ import (
 	"net"
 )
 
-func Handler(client net.Conn) {
-	if err := Handshake(client); err != nil {
-		yaklog.Errorf("%s %v", Tag, err)
+func Handler(conn net.Conn, ctx *Context) {
+	if err := Handshake(conn, ctx); err != nil {
+		yaklog.Errorf("%s %v", ctx.LogTamplate, err)
 		return
 	}
-	yaklog.Infof("%s finish socks handshake", Tag)
-	cmd, addr, err := runcmd(client)
-	if err != nil {
-		yaklog.Errorf("%s %v", Tag, err)
+	yaklog.Infof("%s finish socks handshake", ctx.LogTamplate)
+	if err := Runcmd(conn, ctx); err != nil {
+		yaklog.Errorf("%s %v", ctx.LogTamplate, err)
 		return
 	}
-	yaklog.Infof("%s finish socks command", Tag)
-	if cmd != CONNECT_CMD {
-		yaklog.Warnf("%s not support CMD : %d", Tag, cmd)
+	yaklog.Infof("%s finish socks command", ctx.LogTamplate)
+	switch ctx.Cmd {
+	case CONNECT_CMD:
+		if err := Connect(conn, ctx); err != nil {
+			yaklog.Errorf("%s %v", ctx.LogTamplate, err)
+			return
+		}
+	default:
+		yaklog.Warnf("%s not support CMD : %d", ctx.LogTamplate, ctx.Cmd)
 		return
 	}
-	if err = connect(client, addr); err != nil {
-		yaklog.Error(err)
-		return
-	}
-	yaklog.Infof("%s connection transfer fisished", Tag)
+	yaklog.Infof("%s connection transfer fisished", ctx.LogTamplate)
 }

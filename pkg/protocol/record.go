@@ -3,7 +3,6 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"socks2https/pkg/cert"
@@ -129,31 +128,30 @@ func (r *TLSRecordLayer) GetSNI() string {
 	return ""
 }
 
-func GenrateServerHelloRaw(clientHello *ClientHello) ([]byte, error) {
-	//clientHello, err := ParseClientHello(clientHelloRaw[9:])
-	//if err != nil {
-	//	return nil, fmt.Errorf("parse ClientHello failed : %v", err)
-	//}
-	serverHello, err := clientHello.GenrateServerHello()
+func NewServerHello(clientHello *TLSRecordLayer) (*TLSRecordLayer, error) {
+	serverHello, err := clientHello.TLSHandshakeMessage.ClientHello.GenerateServerHello()
 	if err != nil {
 		return nil, fmt.Errorf("genrate ServerHello failed : %v", err)
 	}
-	serverHelloJSON, _ := json.MarshalIndent(serverHello, "", "  ")
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Server Hello :\n%s", serverHelloJSON)))
 	serverHelloRaw := serverHello.GetRaw()
+	yaklog.Debugf("serverHelloRaw : %v", serverHelloRaw)
 	handShake := &TLSHandshakeMessage{
 		MessageType: MessageTypeServerHello,
 		Length:      uint32(len(serverHelloRaw)),
+		ServerHello: *serverHello,
 		Data:        serverHelloRaw,
 	}
 	handShakeRaw := handShake.GetRaw()
+	yaklog.Debugf("handShakeRaw : %v", handShakeRaw)
 	record := &TLSRecordLayer{
-		ContentType: ContentTypeHandshake,
-		Version:     VersionTLS12,
-		Length:      uint16(len(handShakeRaw)),
-		Fragment:    handShakeRaw,
+		ContentType:         ContentTypeHandshake,
+		Version:             VersionTLS12,
+		Length:              uint16(len(handShakeRaw)),
+		TLSHandshakeMessage: *handShake,
+		Fragment:            handShakeRaw,
 	}
-	return record.GetRaw(), nil
+	yaklog.Debugf("recordRaw : %v", record.GetRaw())
+	return record, nil
 }
 
 func NewCertificate(path, domain string) (*TLSRecordLayer, error) {
@@ -185,4 +183,18 @@ func NewCertificate(path, domain string) (*TLSRecordLayer, error) {
 		Fragment:    handShakeRaw,
 	}
 	return record, nil
+}
+
+func NewServerHelloDone() *TLSRecordLayer {
+	handShake := &TLSHandshakeMessage{
+		MessageType: MessageTypeServerHelloDone,
+		Length:      0,
+	}
+	handShakeRaw := handShake.GetRaw()
+	return &TLSRecordLayer{
+		ContentType: ContentTypeHandshake,
+		Version:     VersionTLS12,
+		Length:      uint16(len(handShakeRaw)),
+		Fragment:    handShakeRaw,
+	}
 }

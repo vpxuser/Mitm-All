@@ -5,7 +5,6 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
@@ -23,6 +22,55 @@ var (
 	CertificateDB = make(map[string]*x509.Certificate)
 	PrivateKeyDB  = make(map[string]*rsa.PrivateKey)
 )
+
+func init() {
+	caCertDER, noExist := LoadCert("config/ca.crt")
+	caKeyDER, err := LoadKey("config/ca.key")
+	if err != nil || noExist != nil {
+		caKeyDER, err = rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			yaklog.Fatalf("create CA Private Key failed : %v", err)
+		} else if err = SaveFakeKey("config", "ca", caKeyDER); err != nil {
+			yaklog.Fatalf("save CA Private Key failed : %v", err)
+		}
+		caCertDER, err = CreateFakeRootCertificate("www.digicert.com", caKeyDER)
+		if err != nil {
+			yaklog.Fatalf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%v", err)))
+		} else if err = SaveCertificate("config", "ca", caCertDER); err != nil {
+			yaklog.Fatalf("save CA Certificate failed : %v", err)
+		}
+	} else {
+		CertificateDB["ca"] = caCertDER
+		PrivateKeyDB["ca"] = caKeyDER
+	}
+}
+
+func CreateFakeRootCertificate(domain string, caKeyDER *rsa.PrivateKey) (*x509.Certificate, error) {
+	realCert, err := GetRealCertificate(domain)
+	if err != nil {
+		return nil, fmt.Errorf("get CA Certificate Tamplate failed : %v", err)
+	}
+	caTamplate := &x509.Certificate{
+		SerialNumber:          realCert.SerialNumber,       // 使用新的序列号
+		Subject:               realCert.Subject,            // 复制主体信息，使其看起来与原始证书一致
+		NotBefore:             time.Now(),                  // 修改有效期
+		NotAfter:              time.Now().AddDate(1, 0, 0), // 证书有效期为1年
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            0,
+		MaxPathLenZero:        true,
+	}
+	caCertRaw, err := x509.CreateCertificate(rand.Reader, caTamplate, caTamplate, &caKeyDER.PublicKey, caKeyDER)
+	if err != nil {
+		return nil, fmt.Errorf("create CA Certificate failed : %v", err)
+	}
+	caCertDER, err := x509.ParseCertificate(caCertRaw)
+	if err != nil {
+		return nil, fmt.Errorf("parse CA Certificate failed : %v", err)
+	}
+	return caCertDER, nil
+}
 
 // GetParentDomain 获取域名的上级域名
 func GetParentDomain(domain string) string {
@@ -183,8 +231,8 @@ func SaveFakeKey(path, domain string, keyDER *rsa.PrivateKey) error {
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(keyDER),
 	}
-	keyPEM, err := os.Create(fmt.Sprintf("%s/%s", path, domain))
-	if err != nil {
+	keyPEM, err := os.Create(fmt.Sprintf("%s/%s.key", path, domain))
+	if err != nil && !os.IsExist(err) && domain != "ca" {
 		return fmt.Errorf("create Private Key PEM file failed : %v", err)
 	}
 	defer keyPEM.Close()
@@ -200,8 +248,8 @@ func SaveCertificate(path, domain string, certDER *x509.Certificate) error {
 		Type:  "CERTIFICATE",
 		Bytes: certDER.Raw,
 	}
-	certPEM, err := os.Create(fmt.Sprintf("%s/%s", path, domain))
-	if err != nil {
+	certPEM, err := os.Create(fmt.Sprintf("%s/%s.crt", path, domain))
+	if err != nil && !os.IsExist(err) && domain != "ca" {
 		return fmt.Errorf("create Fake Certificate PEM file failed : %v", err)
 	}
 	defer certPEM.Close()
@@ -255,54 +303,4 @@ func GetCertificateAndKey(path, domain string) (*x509.Certificate, *rsa.PrivateK
 		}
 	}
 	return fakeCert, fakeKey, nil
-}
-
-// GetRootCAs 从文件中读取证书
-func GetRootCAs(crt *x509.Certificate) (*x509.CertPool, error) {
-	certPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: crt.Raw,
-	})
-	rootCAs := x509.NewCertPool()
-	rootCAs.AppendCertsFromPEM(certPEM)
-	return rootCAs, nil
-}
-
-// GenerateMITMCertificate 根据 SNI 提供的域名生成伪造的证书和私钥
-func GenerateMITMCertificate(domain string, caCrt *x509.Certificate, caKey *rsa.PrivateKey) (*tls.Certificate, error) {
-	// 检查输入的域名
-	//if domain == "" {
-	//	return nil, fmt.Errorf("domain is empty")
-	//}
-	// 生成 RSA 私钥
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, fmt.Errorf("create private key failed : %v", err)
-	}
-	// 创建证书模板
-	certTemplate := x509.Certificate{
-		SerialNumber: big.NewInt(time.Now().UnixNano()),
-		Subject: pkix.Name{
-			CommonName: domain,
-		},
-		NotBefore:   time.Now(),
-		NotAfter:    time.Now().Add(1 * 365 * 24 * time.Hour), // 证书有效期 1 年
-		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:    []string{domain},
-	}
-	// 用 CA 证书和私钥签署生成的证书
-	certDER, err := x509.CreateCertificate(rand.Reader, &certTemplate, caCrt, &rsaKey.PublicKey, caKey)
-	if err != nil {
-		return nil, fmt.Errorf("create certificate failed : %v", err)
-	}
-	// 编码证书和私钥为 PEM 格式
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	privPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(rsaKey)})
-	// 创建 tls.Certificate
-	cert, err := tls.X509KeyPair(certPEM, privPEM)
-	if err != nil {
-		return nil, fmt.Errorf("create certificate failed : %v", err)
-	}
-	return &cert, nil
 }

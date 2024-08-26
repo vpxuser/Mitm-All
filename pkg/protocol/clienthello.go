@@ -112,15 +112,15 @@ func ParseClientHello(data []byte) (*ClientHello, error) {
 	return clientHello, nil
 }
 
-func (c *ClientHello) GenrateServerHello() (*ServerHello, error) {
+func (c *ClientHello) GenerateServerHello() (*ServerHello, error) {
 	serverHello := &ServerHello{Version: c.Version}
 	binary.BigEndian.PutUint32(serverHello.Random[0:4], uint32(time.Now().Unix()))
 	if _, err := rand.Read(serverHello.Random[4:]); err != nil {
-		return nil, fmt.Errorf("generate SessionID failed : %v", err)
+		return nil, fmt.Errorf("generate Random field failed: %v", err)
 	}
 	sessionID := make([]byte, 32)
 	if _, err := rand.Read(sessionID); err != nil {
-		return nil, fmt.Errorf("generate SessionID failed : %v", err)
+		return nil, fmt.Errorf("generate SessionID failed: %v", err)
 	}
 	serverHello.SessionID = sessionID
 	continueSwitch := false

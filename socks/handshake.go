@@ -27,7 +27,7 @@ const (
 
 // socks握手处理函数
 // 暂时只支持 未授权访问 方法
-func Handshake(conn net.Conn) error {
+func Handshake(conn net.Conn, ctx *Context) error {
 	// 客户端请求包
 	// +----+----------+----------+
 	// |VER | NMETHODS | METHODS  |
@@ -39,7 +39,7 @@ func Handshake(conn net.Conn) error {
 		return fmt.Errorf("read VER and NMETHODS failed : %v", err)
 	}
 	ver, nMethods := buf[0], buf[1]
-	yaklog.Debugf("VER : %v , NMETHODS : %v", ver, nMethods)
+	yaklog.Debugf("%s VER : %v , NMETHODS : %v", ctx.LogTamplate, ver, nMethods)
 	if ver != SOCKS5_VERSION {
 		return fmt.Errorf("unsupport SOCKS version : %d", ver)
 	}
@@ -47,7 +47,7 @@ func Handshake(conn net.Conn) error {
 	if _, err := conn.Read(methods); err != nil {
 		return fmt.Errorf("read METHODS failed : %v", err)
 	}
-	yaklog.Debugf("METHODS : %v", methods)
+	yaklog.Debugf("%s METHODS : %v", ctx.LogTamplate, methods)
 	var method byte
 	for _, method = range methods {
 		switch method {
@@ -62,7 +62,7 @@ func Handshake(conn net.Conn) error {
 			method = NO_ACCEPTABLE_METHOD
 		}
 	}
-	yaklog.Infof("receive Client handshake data : %s", comm.SetColor(comm.GREEN_COLOR_TYPE, fmt.Sprintf("%v", append(buf, methods...))))
+	yaklog.Infof("%s receive Client handshake data : %s", ctx.LogTamplate, comm.SetColor(comm.GREEN_COLOR_TYPE, fmt.Sprintf("%v", append(buf, methods...))))
 	// 服务端响应包
 	// +----+--------+
 	// |VER | METHOD |
@@ -86,27 +86,27 @@ func Handshake(conn net.Conn) error {
 //	| 1  |  1   | 1 to 255 |  1   | 1 to 255 |
 //	+----+------+----------+------+----------+
 
-func parseUnamePasswd(tag string, reader *bufio.Reader) (byte, error) {
+func parseUnamePasswd(reader *bufio.Reader, ctx *Context) (byte, error) {
 	buf := make([]byte, 2)
 	if _, err := reader.Read(buf); err != nil {
-		return FAIL_AUTHENTICATION, fmt.Errorf("%s read VER and ULEN failed : %v", tag, err)
+		return FAIL_AUTHENTICATION, fmt.Errorf("%s read VER and ULEN failed : %v", ctx.LogTamplate, err)
 	}
 	ver, uLen := buf[0], buf[1]
-	yaklog.Debugf("%s VER : %v , ULEN : %v", tag, ver, uLen)
+	yaklog.Debugf("%s VER : %v , ULEN : %v", ctx.LogTamplate, ver, uLen)
 	if ver != AUTHENTICATION_VERSION {
-		return FAIL_AUTHENTICATION, fmt.Errorf("%s not support auth version", tag)
+		return FAIL_AUTHENTICATION, fmt.Errorf("%s not support auth version", ctx.LogTamplate)
 	}
 	uname := make([]byte, uLen)
 	if _, err := reader.Read(uname); err != nil {
-		return FAIL_AUTHENTICATION, fmt.Errorf("%s read UNAME failed : %v", tag, err)
+		return FAIL_AUTHENTICATION, fmt.Errorf("%s read UNAME failed : %v", ctx.LogTamplate, err)
 	}
 	pLen, err := reader.ReadByte()
 	if err != nil {
-		return FAIL_AUTHENTICATION, fmt.Errorf("%s read PLEN failed : %v", tag, err)
+		return FAIL_AUTHENTICATION, fmt.Errorf("%s read PLEN failed : %v", ctx.LogTamplate, err)
 	}
 	passwd := make([]byte, pLen)
 	if _, err = reader.Read(passwd); err != nil {
-		return FAIL_AUTHENTICATION, fmt.Errorf("%s read PASSWD failed : %v", tag, err)
+		return FAIL_AUTHENTICATION, fmt.Errorf("%s read PASSWD failed : %v", ctx.LogTamplate, err)
 	}
 	if string(passwd) == "admin" && string(uname) == "admin" {
 		return SUCCESS_AUTHENTICATION, nil
@@ -121,11 +121,11 @@ func parseUnamePasswd(tag string, reader *bufio.Reader) (byte, error) {
 // | 1  |   1    |
 // +----+--------+
 
-func replyUnamePass(tag string, status byte, conn net.Conn) error {
+func replyUnamePass(status byte, conn net.Conn, ctx *Context) error {
 	buf := []byte{AUTHENTICATION_VERSION, status}
-	yaklog.Debugf("%s send auth response : %v", tag, buf)
+	yaklog.Debugf("%s send auth response : %v", ctx.LogTamplate, buf)
 	if _, err := conn.Write(buf); err != nil {
-		return fmt.Errorf("%s send auth response to Client failed : %v", tag, err)
+		return fmt.Errorf("%s send auth response to Client failed : %v", ctx.LogTamplate, err)
 	}
 	return nil
 }

@@ -1,4 +1,4 @@
-package mitm
+package socks
 
 import (
 	"bufio"
