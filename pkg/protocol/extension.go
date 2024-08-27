@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	yaklog "github.com/yaklang/yaklang/common/log"
-	"socks2https/pkg/comm"
 )
 
 const (
@@ -34,99 +32,94 @@ const (
 )
 
 type Extension struct {
-	Type                 uint16               `json:"type"`
-	Length               uint16               `json:"length"`
-	Data                 []byte               `json:"data"`
-	ServerNameIndication ServerNameIndication `json:"serverNameIndication"`
+	Type       uint16     `json:"type"`
+	Length     uint16     `json:"length"`
+	ServerName ServerName `json:"serverName"`
+	Payload    []byte     `json:"payload"`
 }
 
-// ServerNameIndication 代表 TLS 中的 SNI 扩展
-type ServerNameIndication struct {
-	ServerNameListLength uint16       `json:"serverNameListLength"`
-	ServerNameList       []ServerName `json:"serverNameList"`
-}
-
-// ServerName 代表 SNI 中的单个服务器名称
 type ServerName struct {
-	NameType   uint8  `json:"nameType"`
-	NameLength uint16 `json:"nameLength"`
-	HostName   string `json:"hostName"`
+	ListLength uint16 `json:"listLength"`
+	List       []struct {
+		Type   uint8  `json:"type"`
+		Length uint16 `json:"length"`
+		Name   string `json:"name"`
+	} `json:"list"`
 }
 
-func ParseExtensions(data []byte) ([]Extension, error) {
-	reader := bytes.NewReader(data)
-	var extensions []Extension
-	for remaining := uint16(len(data)); remaining > 0; {
-		extension := &Extension{}
-		if err := binary.Read(reader, binary.BigEndian, &extension.Type); err != nil {
-			return nil, fmt.Errorf("failed to read extension type: %w", err)
-		}
-		if err := binary.Read(reader, binary.BigEndian, &extension.Length); err != nil {
-			return nil, fmt.Errorf("failed to read extension length: %w", err)
-		}
-		extension.Data = make([]byte, extension.Length)
-		if _, err := reader.Read(extension.Data[:]); err != nil {
-			return nil, fmt.Errorf("failed to read extension data: %w", err)
-		}
-		remaining -= (2 + 2 + extension.Length) // Type (2 bytes) + Length (2 bytes) + Data
-		switch extension.Type {
-		case ExtensionTypeServerName:
-			serverNameIndication, err := ParseServerNameIndication(extension.Data)
-			if err != nil {
-				yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("parse ServerNameIndication failed : %v", err)))
-				continue
-			}
-			extension.ServerNameIndication = *serverNameIndication
-			//extensionJSON, _ := json.MarshalIndent(extension, "", "  ")
-			//yaklog.Debugf("SNI:\n%s", extensionJSON)
-		}
-		extensions = append(extensions, *extension)
-	}
-	return extensions, nil
-}
-
-func ParseServerNameIndication(data []byte) (*ServerNameIndication, error) {
-	// 确保数据长度足够
+func ParseServerName(data []byte) (*ServerName, error) {
 	if len(data) < 2 {
 		return nil, fmt.Errorf("Extension Data is invaild")
 	}
-	sni := &ServerNameIndication{}
+	serverName := &ServerName{}
 	offset := 0
-	// 解析 ServerNameListLength
-	sni.ServerNameListLength = binary.BigEndian.Uint16(data[offset : offset+2])
+	serverName.ListLength = binary.BigEndian.Uint16(data[offset : offset+2])
 	offset += 2
-	// 解析 ServerName 列表
-	for offset < len(data) {
+	serverName.List = make([]struct {
+		Type   uint8  `json:"type"`
+		Length uint16 `json:"length"`
+		Name   string `json:"name"`
+	}, 0)
+	for i := 0; offset < len(data); i++ {
 		if offset+3 > len(data) {
-			return nil, fmt.Errorf("Server Name Entry is invalid")
+			return nil, fmt.Errorf("Server Name Payload is invalid")
 		}
-		serverName := &ServerName{}
-		serverName.NameType = data[offset]
+		payload := struct {
+			Type   uint8  `json:"type"`
+			Length uint16 `json:"length"`
+			Name   string `json:"name"`
+		}{}
+		payload.Type = data[offset]
 		offset += 1
-		serverName.NameLength = binary.BigEndian.Uint16(data[offset : offset+2])
+		payload.Length = binary.BigEndian.Uint16(data[offset : offset+2])
 		offset += 2
-		if offset+int(serverName.NameLength) > len(data) {
+		index := offset + int(payload.Length)
+		if index > len(data) {
 			return nil, fmt.Errorf("Server Name Length is invalid")
 		}
-		serverName.HostName = string(data[offset : offset+int(serverName.NameLength)])
-		offset += int(serverName.NameLength)
-		sni.ServerNameList = append(sni.ServerNameList, *serverName)
+		payload.Name = string(data[offset:index])
+		offset += index
+		serverName.List = append(serverName.List, payload)
 	}
-	return sni, nil
+	return serverName, nil
 }
 
-func (sni *ServerNameIndication) GetRaw() []byte {
-	serverNameListLength := make([]byte, 2)
-	binary.BigEndian.PutUint16(serverNameListLength, sni.ServerNameListLength)
-	extension := serverNameListLength
-	for _, serverName := range sni.ServerNameList {
-		extension = append(extension, serverName.NameType)
-		nameLength := make([]byte, 2)
-		binary.BigEndian.PutUint16(nameLength, serverName.NameLength)
-		extension = append(extension, nameLength...)
-		extension = append(extension, []byte(serverName.HostName)...)
+func (s *ServerName) GetRaw() []byte {
+	listLength := make([]byte, 2)
+	binary.BigEndian.PutUint16(listLength, s.ListLength)
+	serverName := listLength
+	for _, payload := range s.List {
+		serverName = append(serverName, payload.Type)
+		length := make([]byte, 2)
+		binary.BigEndian.PutUint16(length, payload.Length)
+		serverName = append(serverName, length...)
+		serverName = append(serverName, []byte(payload.Name)...)
 	}
-	return extension
+	return serverName
+}
+
+func ParseExtension(data []byte) (*Extension, error) {
+	reader := bytes.NewReader(data)
+	extension := &Extension{}
+	if err := binary.Read(reader, binary.BigEndian, &extension.Type); err != nil {
+		return nil, fmt.Errorf("failed to read Extension type : %v", err)
+	}
+	if err := binary.Read(reader, binary.BigEndian, &extension.Length); err != nil {
+		return nil, fmt.Errorf("failed to read Extension length : %v", err)
+	}
+	extension.Payload = make([]byte, extension.Length)
+	if _, err := reader.Read(extension.Payload[:]); err != nil {
+		return nil, fmt.Errorf("failed to read Extension Payload : %v", err)
+	}
+	switch extension.Type {
+	case ExtensionTypeServerName:
+		serverName, err := ParseServerName(extension.Payload)
+		if err != nil {
+			return nil, fmt.Errorf("parse ServerName failed : %v", err)
+		}
+		extension.ServerName = *serverName
+	}
+	return extension, nil
 }
 
 func (e *Extension) GetRaw() []byte {
@@ -134,18 +127,11 @@ func (e *Extension) GetRaw() []byte {
 	binary.BigEndian.PutUint16(typ, e.Type)
 	length := make([]byte, 2)
 	binary.BigEndian.PutUint16(length, e.Length)
-	header := append(typ, length...)
+	extension := append(typ, length...)
 	switch true {
-	case &e.ServerNameIndication != nil:
-		return append(header, e.ServerNameIndication.GetRaw()...)
+	case &e.ServerName != nil:
+		return append(extension, e.ServerName.GetRaw()...)
+	default:
+		return append(extension, e.Payload...)
 	}
-	return append(header, e.Data...)
-}
-
-func GetRawExtensions(extensions []Extension) []byte {
-	var data []byte
-	for _, extension := range extensions {
-		data = append(data, extension.GetRaw()...)
-	}
-	return data
 }

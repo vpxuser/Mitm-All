@@ -37,10 +37,10 @@ func ParseCertificate(data []byte) (*Certificate, error) {
 }
 
 func (c *Certificate) GetRaw() []byte {
-	certificatesLength := []byte{byte(c.CertificatesLength & 0xff), byte((c.CertificatesLength >> 8) & 0xff), byte((c.CertificatesLength >> 16) & 0xff)}
+	certificatesLength := []byte{byte(c.CertificatesLength >> 16), byte(c.CertificatesLength >> 8), byte(c.CertificatesLength)}
 	certificates := certificatesLength
 	for _, certificate := range c.Certificates {
-		certificateLength := []byte{byte(c.CertificatesLength & 0xff), byte((c.CertificatesLength >> 8) & 0xff), byte((c.CertificatesLength >> 16) & 0xff)}
+		certificateLength := []byte{byte(certificate.CertificateLength >> 16), byte(certificate.CertificateLength >> 8), byte(certificate.CertificateLength)}
 		certificates = append(certificates, certificateLength...)
 		certificates = append(certificates, certificate.Certificate...)
 	}

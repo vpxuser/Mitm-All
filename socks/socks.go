@@ -24,7 +24,9 @@ type Context struct {
 	Port        uint16
 	Domain      string
 	Cmd         uint8
-	ClientHello protocol.TLSRecordLayer
+	ClientHello protocol.Record
+	Encrypted   bool
+	Secret      []byte
 }
 
 type MitmSocks struct {
@@ -86,13 +88,13 @@ func (c *Context) GetDomain() string {
 	return c.Domain
 }
 
-func (c *Context) SetClientHello(clientHello *protocol.TLSRecordLayer) {
+func (c *Context) SetClientHello(clientHello *protocol.Record) {
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 	c.ClientHello = *clientHello
 }
 
-func (c *Context) GetClientHello() *protocol.TLSRecordLayer {
+func (c *Context) GetClientHello() *protocol.Record {
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 	return &c.ClientHello

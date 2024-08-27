@@ -2,11 +2,11 @@ package protocol
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	yaklog "github.com/yaklang/yaklang/common/log"
 	"socks2https/pkg/cert"
-	"socks2https/pkg/comm"
+	"time"
 )
 
 // TLS 常见消息类型
@@ -61,20 +61,25 @@ var Version = map[uint16]string{
 	VersionTLS13: "TLS Version TLS13",
 }
 
-type TLSRecordLayer struct {
-	ContentType         uint8               `json:"contentType"` //1 byte
-	Version             uint16              `json:"version"`     //2 byte
-	Length              uint16              `json:"length"`      //2 byte
-	Fragment            []byte              `json:"fragment"`
-	TLSHandshakeMessage TLSHandshakeMessage `json:"tlsHandshakeMessage"`
+type Record struct {
+	ContentType      uint8     `json:"contentType"` //1 byte
+	Version          uint16    `json:"version"`     //2 byte
+	Length           uint16    `json:"length"`      //2 byte
+	Handshake        Handshake `json:"handshake"`
+	ChangeCipherSpec uint8     `json:"changeCipherSpec"`
+	Fragment         []byte    `json:"fragment"`
 }
 
-func ParseTLSRecordLayer(data []byte) (*TLSRecordLayer, error) {
+func ParseRecord(args ...interface{}) (*Record, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("not enough arguments")
+	}
+	data := args[0].([]byte)
 	if len(data) < 5 {
 		return nil, fmt.Errorf("TLS Record is invalid")
 	}
 	reader := bytes.NewReader(data)
-	record := &TLSRecordLayer{}
+	record := &Record{}
 	if err := binary.Read(reader, binary.BigEndian, &record.ContentType); err != nil {
 		return nil, fmt.Errorf("parse TLS Record Content Type failed: %v", err)
 	}
@@ -90,71 +95,87 @@ func ParseTLSRecordLayer(data []byte) (*TLSRecordLayer, error) {
 	record.Fragment = data[5 : 5+record.Length]
 	switch record.ContentType {
 	case ContentTypeHandshake:
-		handshakeMessage, err := ParseHandshakeMessage(record.Fragment)
+		handshake, err := ParseHandshake(record.Fragment, args[1:])
 		if err != nil {
-			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("parse Handshake Message failed: %v", err)))
-			break
+			return nil, fmt.Errorf("parse Handshake failed: %v", err)
 		}
-		record.TLSHandshakeMessage = *handshakeMessage
+		record.Handshake = *handshake
+	case ContentTypeChangeCipherSpec:
+		record.ChangeCipherSpec = 0x01
 	}
 	return record, nil
 }
 
-func (r *TLSRecordLayer) GetRaw() []byte {
+func (r *Record) GetRaw() []byte {
 	version := make([]byte, 2)
 	binary.BigEndian.PutUint16(version, r.Version)
-	header := append([]byte{r.ContentType}, version...)
+	record := append([]byte{r.ContentType}, version...)
 	length := make([]byte, 2)
 	binary.BigEndian.PutUint16(length, r.Length)
-	header = append(header, length...)
+	record = append(record, length...)
 	switch true {
-	case &r.TLSHandshakeMessage != nil:
-		return append(header, r.TLSHandshakeMessage.GetRaw()...)
+	case &r.Handshake != nil:
+		return append(record, r.Handshake.GetRaw()...)
 	default:
-		return append(header, r.Fragment...)
+		return append(record, r.Fragment...)
 	}
 }
 
-func (r *TLSRecordLayer) GetSNI() string {
-	for _, extension := range r.TLSHandshakeMessage.ClientHello.Extensions {
+func (r *Record) GetDomain() (string, bool) {
+	for _, extension := range r.Handshake.ClientHello.Extensions {
 		if extension.Type == ExtensionTypeServerName {
-			serverNameList := extension.ServerNameIndication.ServerNameList
-			if len(serverNameList) > 0 {
-				return serverNameList[0].HostName
+			list := extension.ServerName.List
+			if len(list) > 0 {
+				return list[0].Name, true
 			}
+		}
+	}
+	return "", false
+}
+
+func NewServerHello(c *Record) (*Record, error) {
+	serverHello := &ServerHello{Version: c.Handshake.ClientHello.Version}
+	binary.BigEndian.PutUint32(serverHello.Random[0:4], uint32(time.Now().Unix()))
+	if _, err := rand.Read(serverHello.Random[4:]); err != nil {
+		return nil, fmt.Errorf("generate Random field failed: %v", err)
+	}
+	serverHello.SessionIDLength = 32
+	serverHello.SessionID = make([]byte, serverHello.SessionIDLength)
+	if _, err := rand.Read(serverHello.SessionID); err != nil {
+		return nil, fmt.Errorf("generate SessionID failed: %v", err)
+	}
+	returnSwitch := true
+	for _, cipherSuite := range c.Handshake.ClientHello.CipherSuites {
+		if cipherSuite == TLS_RSA_WITH_AES_128_CBC_SHA {
+			returnSwitch = false
+			serverHello.CipherSuite = TLS_RSA_WITH_AES_128_CBC_SHA
 			break
 		}
 	}
-	return ""
-}
-
-func NewServerHello(clientHello *TLSRecordLayer) (*TLSRecordLayer, error) {
-	serverHello, err := clientHello.TLSHandshakeMessage.ClientHello.GenerateServerHello()
-	if err != nil {
-		return nil, fmt.Errorf("genrate ServerHello failed : %v", err)
+	if returnSwitch {
+		return nil, fmt.Errorf("no supported CipherSuites found")
 	}
+	serverHello.CompressionMethod = 0
+	serverHello.ExtensionsLength = 0
 	serverHelloRaw := serverHello.GetRaw()
-	yaklog.Debugf("serverHelloRaw : %v", serverHelloRaw)
-	handShake := &TLSHandshakeMessage{
-		MessageType: MessageTypeServerHello,
-		Length:      uint32(len(serverHelloRaw)),
-		ServerHello: *serverHello,
-		Data:        serverHelloRaw,
+	handshake := &Handshake{
+		HandshakeType: HandshakeTypeServerHello,
+		Length:        uint32(len(serverHelloRaw)),
+		ServerHello:   *serverHello,
+		Payload:       serverHelloRaw,
 	}
-	handShakeRaw := handShake.GetRaw()
-	yaklog.Debugf("handShakeRaw : %v", handShakeRaw)
-	record := &TLSRecordLayer{
-		ContentType:         ContentTypeHandshake,
-		Version:             VersionTLS12,
-		Length:              uint16(len(handShakeRaw)),
-		TLSHandshakeMessage: *handShake,
-		Fragment:            handShakeRaw,
+	handshakeRaw := handshake.GetRaw()
+	record := &Record{
+		ContentType: ContentTypeHandshake,
+		Version:     VersionTLS12,
+		Length:      uint16(len(handshakeRaw)),
+		Handshake:   *handshake,
+		Fragment:    handshakeRaw,
 	}
-	yaklog.Debugf("recordRaw : %v", record.GetRaw())
 	return record, nil
 }
 
-func NewCertificate(path, domain string) (*TLSRecordLayer, error) {
+func NewCertificate(path, domain string) (*Record, error) {
 	certDER, _, err := cert.GetCertificateAndKey(path, domain)
 	if err != nil {
 		return nil, err
@@ -170,31 +191,35 @@ func NewCertificate(path, domain string) (*TLSRecordLayer, error) {
 		}},
 	}
 	certificateRaw := certificate.GetRaw()
-	handShake := &TLSHandshakeMessage{
-		MessageType: MessageTypeServerHello,
-		Length:      uint32(len(certificateRaw)),
-		Data:        certificateRaw,
+	handshake := &Handshake{
+		HandshakeType: HandshakeTypeCertificate,
+		Length:        uint32(len(certificateRaw)),
+		Certificate:   *certificate,
+		Payload:       certificateRaw,
 	}
-	handShakeRaw := handShake.GetRaw()
-	record := &TLSRecordLayer{
+	handshakeRaw := handshake.GetRaw()
+	record := &Record{
 		ContentType: ContentTypeHandshake,
 		Version:     VersionTLS12,
-		Length:      uint16(len(handShakeRaw)),
-		Fragment:    handShakeRaw,
+		Length:      uint16(len(handshakeRaw)),
+		Handshake:   *handshake,
+		Fragment:    handshakeRaw,
 	}
 	return record, nil
 }
 
-func NewServerHelloDone() *TLSRecordLayer {
-	handShake := &TLSHandshakeMessage{
-		MessageType: MessageTypeServerHelloDone,
-		Length:      0,
+func NewServerHelloDone() *Record {
+	handshake := &Handshake{
+		HandshakeType: HandshakeTypeServerHelloDone,
+		Length:        0,
 	}
-	handShakeRaw := handShake.GetRaw()
-	return &TLSRecordLayer{
+	handshakeRaw := handshake.GetRaw()
+	//yaklog.Debugf("handshake raw: %s", comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%v", handshakeRaw)))
+	return &Record{
 		ContentType: ContentTypeHandshake,
 		Version:     VersionTLS12,
-		Length:      uint16(len(handShakeRaw)),
-		Fragment:    handShakeRaw,
+		Length:      uint16(len(handshakeRaw)),
+		Handshake:   *handshake,
+		Fragment:    handshakeRaw,
 	}
 }

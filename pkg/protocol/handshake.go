@@ -2,53 +2,57 @@ package protocol
 
 import (
 	"fmt"
-	yaklog "github.com/yaklang/yaklang/common/log"
-	"socks2https/pkg/comm"
 )
 
 // TLS 握手消息类型
 const (
-	MessageTypeHelloRequest       uint8 = 0x00 // 请求客户端发起Hello消息
-	MessageTypeClientHello        uint8 = 0x01 // 客户端发起握手请求
-	MessageTypeServerHello        uint8 = 0x02 // 服务器响应客户端Hello消息
-	MessageTypeHelloRetryRequest  uint8 = 0x03 // 服务器请求客户端重新发起Hello消息
-	MessageTypeNewSessionTicket   uint8 = 0x04 // 会话票据
-	MessageTypeEndOfEarlyData     uint8 = 0x05 // 结束早期数据交换
-	MessageTypeCertificate        uint8 = 0x0B // 服务器或客户端发送的证书
-	MessageTypeServerKeyExchange  uint8 = 0x0C // 服务器密钥交换
-	MessageTypeCertificateRequest uint8 = 0x0D // 服务器请求客户端证书
-	MessageTypeServerHelloDone    uint8 = 0x0E // 服务器完成Hello阶段
-	MessageTypeCertificateVerify  uint8 = 0x0F // 客户端或服务器验证证书
-	MessageTypeClientKeyExchange  uint8 = 0x10 // 客户端密钥交换
-	MessageTypeFinished           uint8 = 0x14 // 握手完成消息
+	HandshakeTypeHelloRequest       uint8 = 0x00 // 请求客户端发起Hello消息
+	HandshakeTypeClientHello        uint8 = 0x01 // 客户端发起握手请求
+	HandshakeTypeServerHello        uint8 = 0x02 // 服务器响应客户端Hello消息
+	HandshakeTypeHelloRetryRequest  uint8 = 0x03 // 服务器请求客户端重新发起Hello消息
+	HandshakeTypeNewSessionTicket   uint8 = 0x04 // 会话票据
+	HandshakeTypeEndOfEarlyData     uint8 = 0x05 // 结束早期数据交换
+	HandshakeTypeCertificate        uint8 = 0x0B // 服务器或客户端发送的证书
+	HandshakeTypeServerKeyExchange  uint8 = 0x0C // 服务器密钥交换
+	HandshakeTypeCertificateRequest uint8 = 0x0D // 服务器请求客户端证书
+	HandshakeTypeServerHelloDone    uint8 = 0x0E // 服务器完成Hello阶段
+	HandshakeTypeCertificateVerify  uint8 = 0x0F // 客户端或服务器验证证书
+	HandshakeTypeClientKeyExchange  uint8 = 0x10 // 客户端密钥交换
+	HandshakeTypeFinished           uint8 = 0x14 // 握手完成消息
 )
 
-var MessageType = map[byte]string{
-	MessageTypeHelloRequest:       "Hello Request",
-	MessageTypeClientHello:        "Client Hello",
-	MessageTypeServerHello:        "Server Hello",
-	MessageTypeHelloRetryRequest:  "Hello Retry Request",
-	MessageTypeNewSessionTicket:   "New Session Ticket",
-	MessageTypeEndOfEarlyData:     "End of Early Data",
-	MessageTypeCertificate:        "Certificate",
-	MessageTypeServerKeyExchange:  "Server Key Exchange",
-	MessageTypeCertificateRequest: "Certificate Request",
-	MessageTypeServerHelloDone:    "Server Hello Done",
-	MessageTypeCertificateVerify:  "Certificate Verify",
-	MessageTypeClientKeyExchange:  "Client Key Exchange",
-	MessageTypeFinished:           "Finished Message",
+var HandshakeType = map[byte]string{
+	HandshakeTypeHelloRequest:       "Hello Request",
+	HandshakeTypeClientHello:        "Client Hello",
+	HandshakeTypeServerHello:        "Server Hello",
+	HandshakeTypeHelloRetryRequest:  "Hello Retry Request",
+	HandshakeTypeNewSessionTicket:   "New Session Ticket",
+	HandshakeTypeEndOfEarlyData:     "End of Early Data",
+	HandshakeTypeCertificate:        "Certificate",
+	HandshakeTypeServerKeyExchange:  "Server Key Exchange",
+	HandshakeTypeCertificateRequest: "Certificate Request",
+	HandshakeTypeServerHelloDone:    "Server Hello Done",
+	HandshakeTypeCertificateVerify:  "Certificate Verify",
+	HandshakeTypeClientKeyExchange:  "Client Key Exchange",
+	HandshakeTypeFinished:           "Finished Message",
 }
 
-type TLSHandshakeMessage struct {
-	MessageType uint8       `json:"messageType"` // 握手消息类型
-	Length      uint32      `json:"length"`      // 有效载荷长度（3 字节）
-	Data        []byte      `json:"data"`        // 有效载荷数据
-	ClientHello ClientHello `json:"clientHello"`
-	ServerHello ServerHello `json:"serverHello"`
-	Certificate Certificate `json:"certificate"`
+type Handshake struct {
+	HandshakeType     uint8             `json:"handshakeType"` // 握手消息类型
+	Length            uint32            `json:"length"`        // 有效载荷长度（3 字节）
+	ClientHello       ClientHello       `json:"clientHello"`
+	ServerHello       ServerHello       `json:"serverHello"`
+	Certificate       Certificate       `json:"certificate"`
+	ClientKeyExchange ClientKeyExchange `json:"clientKeyExchange"`
+	Finished          Finished          `json:"finished"`
+	Payload           []byte            `json:"payload"` // 有效载荷数据
 }
 
-func ParseHandshakeMessage(data []byte) (*TLSHandshakeMessage, error) {
+func ParseHandshake(args ...interface{}) (*Handshake, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("not enough arguments")
+	}
+	data := args[0].([]byte)
 	if len(data) < 4 {
 		return nil, fmt.Errorf("TLS Handshake is invalid")
 	}
@@ -56,32 +60,68 @@ func ParseHandshakeMessage(data []byte) (*TLSHandshakeMessage, error) {
 	if uint32(len(data)) < 4+length {
 		return nil, fmt.Errorf("TLS Handshake Data is incomplete")
 	}
-	tlsHandshakeMessage := &TLSHandshakeMessage{
-		MessageType: data[0],
-		Length:      length,
-		Data:        data[4 : 4+length],
+	handshake := &Handshake{
+		HandshakeType: data[0],
+		Length:        length,
+		Payload:       data[4 : 4+length],
 	}
-	switch tlsHandshakeMessage.MessageType {
-	case MessageTypeClientHello:
-		clientHello, err := ParseClientHello(tlsHandshakeMessage.Data)
+	switch handshake.HandshakeType {
+	case HandshakeTypeClientHello:
+		clientHello, err := ParseClientHello(handshake.Payload)
 		if err != nil {
-			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("parse Client Hello failed : %v", err)))
-			break
+			return nil, err
 		}
-		tlsHandshakeMessage.ClientHello = *clientHello
+		handshake.ClientHello = *clientHello
+	case HandshakeTypeClientKeyExchange:
+		if len(args) > 1 {
+			keyExchangeAlgorithm, ok := args[1].([]interface{})[0].(uint8)
+			if !ok {
+				return nil, fmt.Errorf("can not get Key Exchange Algorithm : %v", args[1])
+			}
+			clientKeyExchange, err := ParseClientKeyExchange(data, keyExchangeAlgorithm)
+			if err != nil {
+				return nil, err
+			}
+			handshake.ClientKeyExchange = clientKeyExchange
+		}
+	default:
+		if _, ok := HandshakeType[handshake.HandshakeType]; !ok {
+			// maybe finished
+			if len(args) > 1 {
+				finishedAlgorithm, ok := args[1].([]interface{})[0].(uint16)
+				if !ok {
+					return nil, fmt.Errorf("can not get Finished Algorithm : %v", args[1])
+				}
+				finished, err := ParseFinished(data, finishedAlgorithm)
+				if err != nil {
+					return nil, err
+				}
+				handshake.Finished = finished
+			}
+		}
 	}
-	return tlsHandshakeMessage, nil
+	return handshake, nil
 }
 
-func (h *TLSHandshakeMessage) GetRaw() []byte {
-	length := []byte{byte(h.Length & 0xff), byte((h.Length >> 8) & 0xff), byte((h.Length >> 16) & 0xff)}
-	header := append([]byte{h.MessageType}, length...)
-	switch true {
-	case &h.ServerHello != nil:
-		return append(header, h.ServerHello.GetRaw()...)
-	case &h.Certificate != nil:
-		return append(header, h.Certificate.GetRaw()...)
-	default:
-		return append(header, h.Data...)
+func (h *Handshake) GetRaw() []byte {
+	length := []byte{byte(h.Length >> 16), byte(h.Length >> 8), byte(h.Length)}
+	handshake := append([]byte{h.HandshakeType}, length...)
+	if h.Length > 0 {
+		switch h.HandshakeType {
+		case HandshakeTypeServerHello:
+			if &h.ServerHello != nil {
+				return append(handshake, h.ServerHello.GetRaw()...)
+			}
+			fallthrough
+		case HandshakeTypeCertificate:
+			if &h.Certificate != nil {
+				return append(handshake, h.Certificate.GetRaw()...)
+			}
+			fallthrough
+		default:
+			return append(handshake, h.Payload...)
+		}
 	}
+	//yaklog.Debugf("Payload : %s", comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%v", handshake)))
+	return handshake
 }
