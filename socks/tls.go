@@ -131,22 +131,26 @@ func ReadTLSRecordV2(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
 					return err
 				}
 				//todo
+				//clientKeyExchangeJSON, _ := json.MarshalIndent(clientKeyExchange, "", "  ")
+				//yaklog.Debugf("clientKeyExchangeJSON : \n%s", string(clientKeyExchangeJSON))
+				//yaklog.Debugf("Client Key Exchange Raw : %v", clientKeyExchange.GetRaw())
 				encryptedSecret := clientKeyExchange.Handshake.ClientKeyExchange.(*protocol.ClientKeyExchangeRSA).EncryptedPreMasterSecret
-				_, privateKey, err := cert.GetCertificateAndKey("config", "ca")
+				_, privateKey, err := cert.GetCertificateAndKey("config", domain)
 				if err != nil {
 					return err
 				}
+				//yaklog.Debugf("privateKey : %v , domain : %s", privateKey, domain)
 				secret, err := crypt.PKCS1RSADecrypt(privateKey, encryptedSecret)
 				if err != nil {
 					return err
 				}
-				yaklog.Debugf("%s %s , %s%s , PreMaster Secret : %v", client2MitmLog, contentLog, handshakeLog, comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, protocol.HandshakeType[protocol.HandshakeTypeClientKeyExchange])), secret)
+				yaklog.Debugf("%s %s , %s %s , PreMaster Secret : %v", client2MitmLog, contentLog, handshakeLog, comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, protocol.HandshakeType[protocol.HandshakeTypeClientKeyExchange])), secret)
 			default:
 				yaklog.Debugf(handshakeLog)
 			}
 		case protocol.ContentTypeChangeCipherSpec:
 			ctx.Encrypted = true
-			yaklog.Debugf("%s %s", client2MitmLog, contentLog)
+			yaklog.Debugf("%s %s , Change Cipher Spec Raw : %v", client2MitmLog, contentLog, record)
 		case protocol.ContentTypeTLSPlaintext:
 			return fmt.Errorf("TLS Record is invaild type : %s", cType)
 		case protocol.ContentTypeAlert:

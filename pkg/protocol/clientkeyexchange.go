@@ -29,7 +29,7 @@ func (c *ClientKeyExchangeRSA) Parse(data []byte) error {
 		return fmt.Errorf("RSA ClientKeyExchange is invalid")
 	}
 	c.EncryptedPreMasterLength = binary.BigEndian.Uint16(data[0:2])
-	c.EncryptedPreMasterSecret = data[2:] // 修正偏移量
+	c.EncryptedPreMasterSecret = data[2 : 2+c.EncryptedPreMasterLength] // 修正偏移量
 	return nil
 }
 
