@@ -6,7 +6,7 @@ import (
 )
 
 func Handler(conn net.Conn, ctx *Context) {
-	if err := Handshake(conn, ctx); err != nil {
+	if err := handShake(conn, ctx); err != nil {
 		yaklog.Errorf("%s %v", ctx.LogTamplate, err)
 		return
 	}

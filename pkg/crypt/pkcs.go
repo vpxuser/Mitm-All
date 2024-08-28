@@ -1,15 +1,29 @@
 package crypt
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
-func Unpad(data []byte, blockSize int) ([]byte, error) {
-	length := len(data)
+func Pad(plainText []byte, blockSize int) []byte {
+	paddingLen := blockSize - len(plainText)%blockSize
+	paddingText := bytes.Repeat([]byte{byte(paddingLen)}, paddingLen)
+	return append(plainText, paddingText...)
+}
+
+func UnPad(cipherText []byte, blockSize int) ([]byte, error) {
+	length := len(cipherText)
 	if length == 0 || length%blockSize != 0 {
-		return nil, fmt.Errorf("padding invalid")
+		return nil, fmt.Errorf("invalid padding size")
 	}
-	paddingLen := int(data[length-1])
-	if paddingLen == 0 || paddingLen > blockSize {
-		return nil, fmt.Errorf("padding size invalid")
+	paddingLen := int(cipherText[length-1])
+	if paddingLen < 1 || paddingLen > blockSize {
+		return nil, fmt.Errorf("invalid padding length")
 	}
-	return data[:length-paddingLen], nil
+	for _, b := range cipherText[length-paddingLen:] {
+		if int(b) != paddingLen {
+			return nil, fmt.Errorf("invalid padding value")
+		}
+	}
+	return cipherText[:length-paddingLen], nil
 }

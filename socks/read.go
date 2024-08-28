@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"socks2https/pkg/comm"
-	"socks2https/pkg/protocol"
 	"strings"
 )
 
@@ -19,7 +18,7 @@ func HeadProtocol(conn net.Conn, ctx *Context) error {
 		return fmt.Errorf("read Protocol Header failed : %v", err)
 	}
 	maybeTLS := false
-	if _, ok := protocol.ContentType[header[0]]; ok {
+	if _, ok := ContentType[header[0]]; ok {
 		maybeTLS = true
 	} else if httpMethod, ok := HttpMethod[strings.TrimSpace(string(header))]; ok {
 		if httpMethod == http.MethodConnect {
@@ -30,9 +29,10 @@ func HeadProtocol(conn net.Conn, ctx *Context) error {
 	}
 	if maybeTLS {
 		version := binary.BigEndian.Uint16(header[1:3])
-		if version >= protocol.VersionSSL30 && version <= protocol.VersionTLS13 {
+		if version >= VersionSSL30 && version <= VersionTLS13 {
 			yaklog.Infof("%s %s", ctx.LogTamplate, comm.SetColor(comm.YELLOW_BG_COLOR_TYPE, comm.SetColor(comm.RED_COLOR_TYPE, "use TSL Connection")))
-			return TLSMITM(reader, conn, ctx)
+			TLSMITM(reader, conn, ctx)
+			return nil
 		}
 	}
 	yaklog.Infof("%s Client use TCP connection", ctx.LogTamplate)

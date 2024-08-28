@@ -1,4 +1,4 @@
-package protocol
+package socks
 
 type Protocol interface {
 	GetRaw() []byte

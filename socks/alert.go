@@ -1,7 +1,9 @@
-package protocol
+package socks
 
 import (
 	"fmt"
+	yaklog "github.com/yaklang/yaklang/common/log"
+	"socks2https/pkg/comm"
 	"socks2https/pkg/crypt"
 )
 
@@ -84,20 +86,10 @@ type Alert struct {
 	Description uint8 // 告警描述
 }
 
-func ParseAlert(data []byte, args ...interface{}) (*Alert, error) {
-	if len(data) == 2 {
-		return &Alert{Level: data[0], Description: data[1]}, nil
-	}
-	//maybe encrypted alert
-	key, ok := args[0].([]byte)
-	if !ok {
-		return nil, fmt.Errorf("get AES Key failed")
-	}
-	iv, ok := args[1].([]byte)
-	if !ok {
-		return nil, fmt.Errorf("get AES IV failed")
-	}
-	fragment, err := crypt.DecryptAESCBC(data, key, iv)
+func ParseAlert(data []byte, ctx *Context) (*Alert, error) {
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Cipher Alert Length : %d , Cipher ALert : %v", len(data), data)))
+	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+	fragment, err := crypt.DecryptAESCBC(data, clientKeyExchange.ClientKey, clientKeyExchange.ClientIV)
 	if err != nil {
 		return nil, err
 	}

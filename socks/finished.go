@@ -1,4 +1,4 @@
-package protocol
+package socks
 
 import (
 	"fmt"
@@ -36,27 +36,17 @@ const (
 
 // Finished 定义一个接口，用于不同加密算法的 Finished 消息解析
 type Finished interface {
-	Parse(data []byte, args ...interface{}) error
+	Parse(data []byte, ctx *Context) error
 }
 
-// AES128CBCFinished 结构体表示使用 AES 128 CBC 算法的 Finished 消息
-type AES128CBCFinished []byte
+type AESCBCFinished []byte
 
 // Parse 实现 Finished 接口的 Parse 方法，用于解析 AES 128 CBC 的 Finished 消息
-func (a *AES128CBCFinished) Parse(data []byte, args ...interface{}) error {
-	if len(args) != 2 {
-		return fmt.Errorf("AES128CBCFinished expects 2 arguments, but got %d", len(args))
-	}
-	yaklog.Debugf("agrs : %v", args)
-	key, ok := args[0].([]byte)
-	if !ok {
-		return fmt.Errorf("key length does not match")
-	}
-	iv, ok := args[1].([]byte)
-	if !ok {
-		return fmt.Errorf("iv length does not match")
-	}
-	verifyData, err := crypt.DecryptAESCBC(data, key, iv)
+func (a *AESCBCFinished) Parse(data []byte, ctx *Context) error {
+	copy(*a, data)
+	//todo
+	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+	verifyData, err := crypt.DecryptAESCBC(data, clientKeyExchange.ServerKey, clientKeyExchange.ServerIV)
 	if err != nil {
 		return err
 	}
@@ -65,15 +55,15 @@ func (a *AES128CBCFinished) Parse(data []byte, args ...interface{}) error {
 }
 
 // ParseFinished 根据传入的数据解析 Finished 消息
-func ParseFinished(data []byte, finishedAlgorithm uint16, args ...interface{}) (Finished, error) {
+func ParseFinished(data []byte, ctx *Context) (Finished, error) {
 	var finished Finished
-	switch finishedAlgorithm {
+	switch ctx.CipherSuite {
 	case TLS_RSA_WITH_AES_128_CBC_SHA:
-		finished = &AES128CBCFinished{}
+		finished = &AESCBCFinished{}
 	default:
-		return nil, fmt.Errorf("unsupported Finished Algorithm : %d", finishedAlgorithm)
+		return nil, fmt.Errorf("unsupported Cipher Suite : %d", ctx.CipherSuite)
 	}
-	if err := finished.Parse(data, args...); err != nil {
+	if err := finished.Parse(data, ctx); err != nil {
 		return nil, err
 	}
 	return finished, nil

@@ -1,11 +1,14 @@
-package protocol
+package socks
 
 import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	yaklog "github.com/yaklang/yaklang/common/log"
 	"socks2https/pkg/cert"
+	"socks2https/pkg/comm"
+	"socks2https/pkg/crypt"
 	"time"
 )
 
@@ -70,7 +73,7 @@ type Record struct {
 	Fragment         []byte    `json:"fragment"`
 }
 
-func ParseRecord(data []byte, args ...interface{}) (*Record, error) {
+func ParseRecord(data []byte, ctx *Context) (*Record, error) {
 	reader := bytes.NewReader(data)
 	record := &Record{}
 	if err := binary.Read(reader, binary.BigEndian, &record.ContentType); err != nil {
@@ -88,7 +91,7 @@ func ParseRecord(data []byte, args ...interface{}) (*Record, error) {
 	record.Fragment = data[5 : 5+record.Length]
 	switch record.ContentType {
 	case ContentTypeHandshake:
-		handshake, err := ParseHandshake(record.Fragment, args...)
+		handshake, err := ParseHandshake(record.Fragment, ctx)
 		if err != nil {
 			return nil, fmt.Errorf("parse Handshake failed: %v", err)
 		}
@@ -171,11 +174,12 @@ func NewServerHello(c *Record) (*Record, error) {
 	return record, nil
 }
 
-func NewCertificate(path, domain string) (*Record, error) {
-	certDER, _, err := cert.GetCertificateAndKey(path, domain)
+func NewCertificate(path string, ctx *Context) (*Record, error) {
+	certDER, keyDER, err := cert.GetCertificateAndKey(path, ctx.Domain)
 	if err != nil {
 		return nil, err
 	}
+	ctx.CertDER, ctx.KeyDER = certDER, keyDER
 	certificate := &Certificate{
 		CertificatesLength: uint32(3 + len(certDER.Raw)),
 		Certificates: []struct {
@@ -220,11 +224,21 @@ func NewServerHelloDone() *Record {
 	}
 }
 
-func NewFinished(verifyData []byte) *Record {
+func NewFinished(ctx *Context) (*Record, error) {
+	hash := ctx.HashFunc()
+	hash.Write(comm.Combine(ctx.HandshakeRawList))
+	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+	verifyData := PRF(clientKeyExchange.MasterSecret, hash.Sum(nil), LabelServerFinished, ctx.HashFunc, 12)
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
+	chiperVerifyData, err := crypt.EncryptAESCBC(verifyData, clientKeyExchange.ServerKey, clientKeyExchange.ServerIV)
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Chiper Verify Data Length : %d , Chiper Verify Data: %v", len(chiperVerifyData), chiperVerifyData)))
+	if err != nil {
+		return nil, err
+	}
 	return &Record{
 		ContentType: ContentTypeHandshake,
 		Version:     VersionTLS12,
-		Length:      uint16(len(verifyData)),
-		Fragment:    verifyData,
-	}
+		Length:      uint16(len(chiperVerifyData)),
+		Fragment:    chiperVerifyData,
+	}, nil
 }
