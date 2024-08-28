@@ -1,6 +1,11 @@
 package protocol
 
-import "fmt"
+import (
+	"fmt"
+	yaklog "github.com/yaklang/yaklang/common/log"
+	"socks2https/pkg/comm"
+	"socks2https/pkg/crypt"
+)
 
 const (
 	// TLS 1.2 Cipher Suites
@@ -31,27 +36,36 @@ const (
 
 // Finished 定义一个接口，用于不同加密算法的 Finished 消息解析
 type Finished interface {
-	Parse([]byte) error
+	Parse(data []byte, args ...interface{}) error
 }
 
 // AES128CBCFinished 结构体表示使用 AES 128 CBC 算法的 Finished 消息
-type AES128CBCFinished struct {
-	IV         [16]byte
-	VerifyData []byte
-}
+type AES128CBCFinished []byte
 
 // Parse 实现 Finished 接口的 Parse 方法，用于解析 AES 128 CBC 的 Finished 消息
-func (a *AES128CBCFinished) Parse(data []byte) error {
-	if len(data) < 16 {
-		return fmt.Errorf("AES-128-CBC Finished is invalid")
+func (a *AES128CBCFinished) Parse(data []byte, args ...interface{}) error {
+	if len(args) != 2 {
+		return fmt.Errorf("AES128CBCFinished expects 2 arguments, but got %d", len(args))
 	}
-	copy(a.IV[:], data[:16])
-	a.VerifyData = data[16:]
+	yaklog.Debugf("agrs : %v", args)
+	key, ok := args[0].([]byte)
+	if !ok {
+		return fmt.Errorf("key length does not match")
+	}
+	iv, ok := args[1].([]byte)
+	if !ok {
+		return fmt.Errorf("iv length does not match")
+	}
+	verifyData, err := crypt.DecryptAESCBC(data, key, iv)
+	if err != nil {
+		return err
+	}
+	yaklog.Debugf(comm.SetColor(comm.RED_BG_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
 	return nil
 }
 
 // ParseFinished 根据传入的数据解析 Finished 消息
-func ParseFinished(data []byte, finishedAlgorithm uint16) (Finished, error) {
+func ParseFinished(data []byte, finishedAlgorithm uint16, args ...interface{}) (Finished, error) {
 	var finished Finished
 	switch finishedAlgorithm {
 	case TLS_RSA_WITH_AES_128_CBC_SHA:
@@ -59,7 +73,7 @@ func ParseFinished(data []byte, finishedAlgorithm uint16) (Finished, error) {
 	default:
 		return nil, fmt.Errorf("unsupported Finished Algorithm : %d", finishedAlgorithm)
 	}
-	if err := finished.Parse(data); err != nil {
+	if err := finished.Parse(data, args...); err != nil {
 		return nil, err
 	}
 	return finished, nil

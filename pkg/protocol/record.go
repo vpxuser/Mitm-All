@@ -70,14 +70,7 @@ type Record struct {
 	Fragment         []byte    `json:"fragment"`
 }
 
-func ParseRecord(args ...interface{}) (*Record, error) {
-	if len(args) < 1 {
-		return nil, fmt.Errorf("not enough arguments")
-	}
-	data := args[0].([]byte)
-	if len(data) < 5 {
-		return nil, fmt.Errorf("TLS Record is invalid")
-	}
+func ParseRecord(data []byte, args ...interface{}) (*Record, error) {
 	reader := bytes.NewReader(data)
 	record := &Record{}
 	if err := binary.Read(reader, binary.BigEndian, &record.ContentType); err != nil {
@@ -95,7 +88,7 @@ func ParseRecord(args ...interface{}) (*Record, error) {
 	record.Fragment = data[5 : 5+record.Length]
 	switch record.ContentType {
 	case ContentTypeHandshake:
-		handshake, err := ParseHandshake(record.Fragment, args[1:])
+		handshake, err := ParseHandshake(record.Fragment, args...)
 		if err != nil {
 			return nil, fmt.Errorf("parse Handshake failed: %v", err)
 		}
@@ -113,12 +106,15 @@ func (r *Record) GetRaw() []byte {
 	length := make([]byte, 2)
 	binary.BigEndian.PutUint16(length, r.Length)
 	record = append(record, length...)
-	switch true {
-	case &r.Handshake != nil:
-		return append(record, r.Handshake.GetRaw()...)
-	default:
-		return append(record, r.Fragment...)
+	if len(r.Fragment) == 0 {
+		switch r.ContentType {
+		case ContentTypeHandshake:
+			return append(record, r.Handshake.GetRaw()...)
+		default:
+			break
+		}
 	}
+	return append(record, r.Fragment...)
 }
 
 func (r *Record) GetDomain() (string, bool) {
@@ -221,5 +217,14 @@ func NewServerHelloDone() *Record {
 		Length:      uint16(len(handshakeRaw)),
 		Handshake:   *handshake,
 		Fragment:    handshakeRaw,
+	}
+}
+
+func NewFinished(verifyData []byte) *Record {
+	return &Record{
+		ContentType: ContentTypeHandshake,
+		Version:     VersionTLS12,
+		Length:      uint16(len(verifyData)),
+		Fragment:    verifyData,
 	}
 }

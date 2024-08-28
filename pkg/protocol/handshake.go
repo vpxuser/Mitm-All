@@ -34,7 +34,7 @@ var HandshakeType = map[byte]string{
 	HandshakeTypeServerHelloDone:    "Server Hello Done",
 	HandshakeTypeCertificateVerify:  "Certificate Verify",
 	HandshakeTypeClientKeyExchange:  "Client Key Exchange",
-	HandshakeTypeFinished:           "Finished Message",
+	HandshakeTypeFinished:           "Finished",
 }
 
 type Handshake struct {
@@ -48,25 +48,19 @@ type Handshake struct {
 	Payload           []byte            `json:"payload"` // 有效载荷数据
 }
 
-func ParseHandshake(args ...interface{}) (*Handshake, error) {
-	if len(args) < 1 {
-		return nil, fmt.Errorf("not enough arguments")
-	}
-	data := args[0].([]byte)
+func ParseHandshake(data []byte, args ...interface{}) (*Handshake, error) {
 	if len(data) < 4 {
 		return nil, fmt.Errorf("TLS Handshake is invalid")
 	}
 	length := uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3])
-	// todo
 	handshake := &Handshake{}
-	if uint32(len(data)) < 4+length {
-		// maybe finished
+	if uint32(len(data)) != 4+length {
 		if len(args) > 1 {
-			finishedAlgorithm, ok := args[1].([]interface{})[0].(uint16)
+			finishedAlgorithm, ok := args[0].(uint16)
 			if !ok {
-				return nil, fmt.Errorf("can not get Finished Algorithm : %v", args[1])
+				return nil, fmt.Errorf("can not get Finished Algorithm : %v", args[0])
 			}
-			finished, err := ParseFinished(data, finishedAlgorithm)
+			finished, err := ParseFinished(data, finishedAlgorithm, args[1:]...)
 			if err != nil {
 				return nil, err
 			}
@@ -86,17 +80,15 @@ func ParseHandshake(args ...interface{}) (*Handshake, error) {
 			}
 			handshake.ClientHello = *clientHello
 		case HandshakeTypeClientKeyExchange:
-			if len(args) > 1 {
-				keyExchangeAlgorithm, ok := args[1].([]interface{})[0].(uint8)
-				if !ok {
-					return nil, fmt.Errorf("can not get Key Exchange Algorithm : %v", args[1])
-				}
-				clientKeyExchange, err := ParseClientKeyExchange(handshake.Payload, keyExchangeAlgorithm)
-				if err != nil {
-					return nil, err
-				}
-				handshake.ClientKeyExchange = clientKeyExchange
+			keyExchangeAlgorithm, ok := args[0].(uint8)
+			if !ok {
+				return nil, fmt.Errorf("can not get Key Exchange Algorithm : %v", args[0])
 			}
+			clientKeyExchange, err := ParseClientKeyExchange(handshake.Payload, keyExchangeAlgorithm)
+			if err != nil {
+				return nil, err
+			}
+			handshake.ClientKeyExchange = clientKeyExchange
 		}
 	}
 	return handshake, nil

@@ -1,8 +1,15 @@
 package crypt
 
-// UnPadding PKCS7
-func UnPadding(data []byte) []byte {
+import "fmt"
+
+func Unpad(data []byte, blockSize int) ([]byte, error) {
 	length := len(data)
-	padLen := int(data[length-1])
-	return data[:length-padLen]
+	if length == 0 || length%blockSize != 0 {
+		return nil, fmt.Errorf("padding invalid")
+	}
+	paddingLen := int(data[length-1])
+	if paddingLen == 0 || paddingLen > blockSize {
+		return nil, fmt.Errorf("padding size invalid")
+	}
+	return data[:length-paddingLen], nil
 }

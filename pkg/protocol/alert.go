@@ -1,6 +1,9 @@
 package protocol
 
-import "fmt"
+import (
+	"fmt"
+	"socks2https/pkg/crypt"
+)
 
 // 定义TLS Alert级别常量
 const (
@@ -81,9 +84,22 @@ type Alert struct {
 	Description uint8 // 告警描述
 }
 
-func ParseAlert(data []byte) (*Alert, error) {
-	if len(data) != 2 {
-		return nil, fmt.Errorf("TLS Alert is invalid")
+func ParseAlert(data []byte, args ...interface{}) (*Alert, error) {
+	if len(data) == 2 {
+		return &Alert{Level: data[0], Description: data[1]}, nil
 	}
-	return &Alert{data[0], data[1]}, nil
+	//maybe encrypted alert
+	key, ok := args[0].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("get AES Key failed")
+	}
+	iv, ok := args[1].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("get AES IV failed")
+	}
+	fragment, err := crypt.DecryptAESCBC(data, key, iv)
+	if err != nil {
+		return nil, err
+	}
+	return &Alert{Level: fragment[0], Description: fragment[1]}, nil
 }

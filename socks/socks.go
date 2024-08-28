@@ -17,16 +17,20 @@ const (
 )
 
 type Context struct {
-	Mutex       sync.Mutex
-	ClientId    string
-	LogTamplate string
-	Host        string
-	Port        uint16
-	Domain      string
-	Cmd         uint8
-	ClientHello protocol.Record
-	Encrypted   bool
-	Secret      []byte
+	Mutex        sync.Mutex
+	ClientId     string
+	LogTamplate  string
+	Host         string
+	Port         uint16
+	Domain       string
+	Cmd          uint8
+	ClientHello  protocol.Record
+	Encrypted    bool
+	ClientRandom [32]byte
+	ServerRandom [32]byte
+	Key          []byte
+	IV           []byte
+	RecordList   [][]byte
 }
 
 type MitmSocks struct {
