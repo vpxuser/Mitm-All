@@ -1,4 +1,4 @@
-package socks
+package mitm
 
 type Protocol interface {
 	GetRaw() []byte

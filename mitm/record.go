@@ -1,4 +1,4 @@
-package socks
+package mitm
 
 import (
 	"bytes"
@@ -132,8 +132,9 @@ func (r *Record) GetDomain() (string, bool) {
 	return "", false
 }
 
-func NewServerHello(c *Record) (*Record, error) {
-	serverHello := &ServerHello{Version: c.Handshake.ClientHello.Version}
+func NewServerHello(c *Record, ctx *Context) (*Record, error) {
+	//serverHello := &ServerHello{Version: c.Handshake.ClientHello.Version}
+	serverHello := &ServerHello{Version: ctx.Version}
 	binary.BigEndian.PutUint32(serverHello.Random[0:4], uint32(time.Now().Unix()))
 	if _, err := rand.Read(serverHello.Random[4:]); err != nil {
 		return nil, fmt.Errorf("generate Random field failed: %v", err)
@@ -166,7 +167,7 @@ func NewServerHello(c *Record) (*Record, error) {
 	handshakeRaw := handshake.GetRaw()
 	record := &Record{
 		ContentType: ContentTypeHandshake,
-		Version:     VersionTLS12,
+		Version:     ctx.Version,
 		Length:      uint16(len(handshakeRaw)),
 		Handshake:   *handshake,
 		Fragment:    handshakeRaw,
@@ -200,7 +201,7 @@ func NewCertificate(path string, ctx *Context) (*Record, error) {
 	handshakeRaw := handshake.GetRaw()
 	record := &Record{
 		ContentType: ContentTypeHandshake,
-		Version:     VersionTLS12,
+		Version:     ctx.Version,
 		Length:      uint16(len(handshakeRaw)),
 		Handshake:   *handshake,
 		Fragment:    handshakeRaw,
@@ -208,7 +209,7 @@ func NewCertificate(path string, ctx *Context) (*Record, error) {
 	return record, nil
 }
 
-func NewServerHelloDone() *Record {
+func NewServerHelloDone(ctx *Context) *Record {
 	handshake := &Handshake{
 		HandshakeType: HandshakeTypeServerHelloDone,
 		Length:        0,
@@ -217,7 +218,7 @@ func NewServerHelloDone() *Record {
 	//yaklog.Debugf("handshake raw: %s", comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%v", handshakeRaw)))
 	return &Record{
 		ContentType: ContentTypeHandshake,
-		Version:     VersionTLS12,
+		Version:     ctx.Version,
 		Length:      uint16(len(handshakeRaw)),
 		Handshake:   *handshake,
 		Fragment:    handshakeRaw,
@@ -228,7 +229,7 @@ func NewFinished(ctx *Context) (*Record, error) {
 	hash := ctx.HashFunc()
 	hash.Write(comm.Combine(ctx.HandshakeRawList))
 	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
-	verifyData := PRF(clientKeyExchange.MasterSecret, hash.Sum(nil), LabelServerFinished, ctx.HashFunc, 12)
+	verifyData := PRF(clientKeyExchange.MasterSecret, []byte(LabelServerFinished), hash.Sum(nil), 12)
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
 	chiperVerifyData, err := crypt.EncryptAESCBC(verifyData, clientKeyExchange.ServerKey, clientKeyExchange.ServerIV)
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Chiper Verify Data Length : %d , Chiper Verify Data: %v", len(chiperVerifyData), chiperVerifyData)))
@@ -237,7 +238,7 @@ func NewFinished(ctx *Context) (*Record, error) {
 	}
 	return &Record{
 		ContentType: ContentTypeHandshake,
-		Version:     VersionTLS12,
+		Version:     ctx.Version,
 		Length:      uint16(len(chiperVerifyData)),
 		Fragment:    chiperVerifyData,
 	}, nil

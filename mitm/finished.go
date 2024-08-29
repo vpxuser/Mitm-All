@@ -1,6 +1,8 @@
-package socks
+package mitm
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"socks2https/pkg/comm"
@@ -34,37 +36,25 @@ const (
 	TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256   uint16 = 0xCCA8
 )
 
-// Finished 定义一个接口，用于不同加密算法的 Finished 消息解析
-type Finished interface {
-	Parse(data []byte, ctx *Context) error
-}
-
-type AESCBCFinished []byte
-
-// Parse 实现 Finished 接口的 Parse 方法，用于解析 AES 128 CBC 的 Finished 消息
-func (a *AESCBCFinished) Parse(data []byte, ctx *Context) error {
-	copy(*a, data)
-	//todo
-	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
-	verifyData, err := crypt.DecryptAESCBC(data, clientKeyExchange.ServerKey, clientKeyExchange.ServerIV)
-	if err != nil {
-		return err
-	}
-	yaklog.Debugf(comm.SetColor(comm.RED_BG_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
-	return nil
-}
+type Finished []byte
 
 // ParseFinished 根据传入的数据解析 Finished 消息
-func ParseFinished(data []byte, ctx *Context) (Finished, error) {
-	var finished Finished
-	switch ctx.CipherSuite {
-	case TLS_RSA_WITH_AES_128_CBC_SHA:
-		finished = &AESCBCFinished{}
-	default:
-		return nil, fmt.Errorf("unsupported Cipher Suite : %d", ctx.CipherSuite)
-	}
-	if err := finished.Parse(data, ctx); err != nil {
+func ParseFinished(data []byte, ctx *Context) (*Finished, error) {
+	finished := &Finished{}
+	copy(*finished, data)
+	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+	verifyData, err := crypt.DecryptAESCBC(data, clientKeyExchange.ClientKey, clientKeyExchange.ClientIV)
+	if err != nil {
 		return nil, err
+	}
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(data), data)))
+	seed := sha256.Sum256(comm.Combine(ctx.HandshakeRawList))
+	expectData := PRF(clientKeyExchange.MasterSecret, []byte(LabelClientFinished), seed[:], 12)
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Expect Data Length : %d , Expect Data : %v", len(expectData), expectData)))
+	if hmac.Equal(verifyData, expectData) {
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Client Finished Success")))
+	} else {
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Client Finished Failed")))
 	}
 	return finished, nil
 }

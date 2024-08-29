@@ -1,6 +1,8 @@
-package socks
+package mitm
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+)
 
 type ServerHello struct {
 	Version           uint16      `json:"version"`

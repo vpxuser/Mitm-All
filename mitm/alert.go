@@ -1,4 +1,4 @@
-package socks
+package mitm
 
 import (
 	"fmt"
@@ -87,11 +87,22 @@ type Alert struct {
 }
 
 func ParseAlert(data []byte, ctx *Context) (*Alert, error) {
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Cipher Alert Length : %d , Cipher ALert : %v", len(data), data)))
-	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
-	fragment, err := crypt.DecryptAESCBC(data, clientKeyExchange.ClientKey, clientKeyExchange.ClientIV)
-	if err != nil {
-		return nil, err
+	alert := &Alert{}
+	if len(data) == 2 {
+		alert.Level, alert.Description = data[0], data[1]
+		return alert, nil
+	} else if len(data) > 2 {
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Cipher Alert Length : %d , Cipher ALert : %v", len(data), data)))
+		clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+		fragment, err := crypt.DecryptAESCBC(data, clientKeyExchange.ClientKey, clientKeyExchange.ClientIV)
+		if err != nil {
+			return nil, err
+		}
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Plain Alert Length : %d , Plain ALert : %v", len(fragment), fragment)))
+		msg := fragment[:len(fragment)-20]
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Alert Length : %d , ALert : %v", len(msg), msg)))
+		alert.Level, alert.Description = msg[0], msg[1]
+		return alert, nil
 	}
-	return &Alert{Level: fragment[0], Description: fragment[1]}, nil
+	return nil, fmt.Errorf("Alert is invaild")
 }

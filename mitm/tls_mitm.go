@@ -1,9 +1,8 @@
-package socks
+package mitm
 
 import (
 	"bufio"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"io"
@@ -40,7 +39,7 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 	ctx.Domain = domain
 	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s , Domain : %s", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[clientHello.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[clientHello.Handshake.HandshakeType])), comm.SetColor(comm.YELLOW_BG_COLOR_TYPE, comm.SetColor(comm.RED_COLOR_TYPE, domain)))
 
-	serverHello, err := NewServerHello(clientHello)
+	serverHello, err := NewServerHello(clientHello, ctx)
 	if err != nil {
 		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return
@@ -68,7 +67,7 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 		return
 	}
 
-	serverHelloDone := NewServerHelloDone()
+	serverHelloDone := NewServerHelloDone(ctx)
 	ctx.ServerHelloDone = *serverHelloDone
 	serverHelloDoneRaw := serverHelloDone.GetRaw()
 	ctx.HandshakeRawList = append(ctx.HandshakeRawList, serverHelloDoneRaw)
@@ -91,8 +90,9 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 		return
 	}
 	ctx.ClientKeyExchange = *clientKeyExchange
-	clientKeyExchangeJSON, _ := json.MarshalIndent(clientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange), "", "  ")
-	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s , Client Key Exchange :\n%s", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[clientKeyExchange.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[clientKeyExchange.Handshake.HandshakeType])), clientKeyExchangeJSON)
+	//clientKeyExchangeJSON, _ := json.MarshalIndent(clientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange), "", "  ")
+	//yaklog.Debugf("%s Content Type : %s , Handshake Type : %s , Client Key Exchange :\n%s", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[clientKeyExchange.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[clientKeyExchange.Handshake.HandshakeType])), clientKeyExchangeJSON)
+	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[clientKeyExchange.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[clientKeyExchange.Handshake.HandshakeType])))
 
 	ctx.HandshakeType = 0xFF
 	changeCipherSpecRaw, err := FilterRecord(reader, ContentTypeChangeCipherSpec, ctx)
@@ -111,21 +111,21 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 	}
 	ctx.HandshakeRawList = append(ctx.HandshakeRawList, finishedRaw)
 	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[finishedRaw[0]]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[HandshakeTypeFinished])))
-	//finished, err := ParseRecord(finishedRaw, ctx)
-	//if err != nil {
-	//	yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
-	//	return
-	//}
-	//ctx.Finished = *finished
-
-	finished, err := NewFinished(ctx)
+	finished, err := ParseRecord(finishedRaw, ctx)
 	if err != nil {
 		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return
-	} else if _, err = client.Write(finished.GetRaw()); err != nil {
-		yaklog.Errorf("%s write Finished failed : %v", ctx.Mitm2ClientLog, err)
 	}
-	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s , Server Finished Raw : %v", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[finished.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[HandshakeTypeFinished])), finished.GetRaw())
+	ctx.Finished = *finished
+
+	//finished, err := NewFinished(ctx)
+	//if err != nil {
+	//	yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
+	//	return
+	//} else if _, err = client.Write(finished.GetRaw()); err != nil {
+	//	yaklog.Errorf("%s write Finished failed : %v", ctx.Mitm2ClientLog, err)
+	//}
+	//yaklog.Debugf("%s Content Type : %s , Handshake Type : %s , Server Finished Raw : %v", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[finished.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[HandshakeTypeFinished])), finished.GetRaw())
 
 	ctx.HandshakeType = 0xFF
 	_, err = FilterRecord(reader, ContentTypeHandshake, ctx)

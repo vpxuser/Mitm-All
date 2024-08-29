@@ -4,6 +4,7 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
+	"socks2https/mitm"
 	"socks2https/pkg/comm"
 	"socks2https/setting"
 )
@@ -34,7 +35,7 @@ const (
 	ADDRESS_TYPE_NOT_SUPPORTED_REP   byte = 0x08
 )
 
-func Runcmd(conn net.Conn, ctx *Context) error {
+func Runcmd(conn net.Conn, ctx *mitm.Context) error {
 	// 客户端请求包
 	// +-----+-----+-------+------+----------+----------+
 	// | VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |

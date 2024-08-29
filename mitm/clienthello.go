@@ -1,4 +1,4 @@
-package socks
+package mitm
 
 import (
 	"bytes"
@@ -6,19 +6,8 @@ import (
 	"fmt"
 )
 
-var CipherSuitesLowVersion = map[uint16]uint16{
-	TLS_RSA_WITH_AES_128_CBC_SHA:          TLS_RSA_WITH_AES_128_CBC_SHA,
-	TLS_RSA_WITH_AES_256_CBC_SHA:          TLS_RSA_WITH_AES_256_CBC_SHA,
-	TLS_RSA_WITH_AES_128_CBC_SHA256:       TLS_RSA_WITH_AES_128_CBC_SHA256,
-	TLS_RSA_WITH_AES_256_CBC_SHA256:       TLS_RSA_WITH_AES_256_CBC_SHA256,
-	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA:    TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:    TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256: TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384: TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
-}
-
 type ClientHello struct {
-	Version                  uint16      `json:"version"`
+	Version                  uint16      `json:"clientHelloTLSVersion"`
 	Random                   [32]byte    `json:"random"`
 	SessionIDLength          uint8       `json:"sessionIDLength"`
 	SessionID                []byte      `json:"sessionID"`
@@ -35,7 +24,7 @@ func ParseClientHello(data []byte) (*ClientHello, error) {
 	reader := bytes.NewReader(data)
 	clientHello := &ClientHello{}
 	if err := binary.Read(reader, binary.BigEndian, &clientHello.Version); err != nil {
-		return nil, fmt.Errorf("parse ClientHello Version failed : %v", err)
+		return nil, fmt.Errorf("parse ClientHello ClientHelloTLSVersion failed : %v", err)
 	}
 	if _, err := reader.Read(clientHello.Random[:]); err != nil {
 		return nil, fmt.Errorf("parse ClientHello Random failed : %v", err)

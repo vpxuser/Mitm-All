@@ -3,10 +3,11 @@ package socks
 import (
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
+	"socks2https/mitm"
 )
 
-func Handler(conn net.Conn, ctx *Context) {
-	if err := handShake(conn, ctx); err != nil {
+func Handler(conn net.Conn, ctx *mitm.Context) {
+	if err := Handshake(conn, ctx); err != nil {
 		yaklog.Errorf("%s %v", ctx.LogTamplate, err)
 		return
 	}
