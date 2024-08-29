@@ -3,6 +3,7 @@ package mitm
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
@@ -226,10 +227,8 @@ func NewServerHelloDone(ctx *Context) *Record {
 }
 
 func NewFinished(ctx *Context) (*Record, error) {
-	hash := ctx.HashFunc()
-	hash.Write(comm.Combine(ctx.HandshakeRawList))
 	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
-	verifyData := PRF(clientKeyExchange.MasterSecret, []byte(LabelServerFinished), hash.Sum(nil), 12)
+	verifyData := PRF(clientKeyExchange.MasterSecret, []byte(LabelServerFinished), comm.CombineHash(ctx.HandshakeRawList, sha256.New), 12)
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
 	chiperVerifyData, err := crypt.EncryptAESCBC(verifyData, clientKeyExchange.ServerKey, clientKeyExchange.ServerIV)
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Chiper Verify Data Length : %d , Chiper Verify Data: %v", len(chiperVerifyData), chiperVerifyData)))

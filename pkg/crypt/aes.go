@@ -4,8 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"fmt"
-	yaklog "github.com/yaklang/yaklang/common/log"
-	"socks2https/pkg/comm"
 )
 
 func EncryptAESCBC(plainText []byte, key, iv []byte) ([]byte, error) {
@@ -34,7 +32,7 @@ func DecryptAESCBC(cipherText []byte, key, iv []byte) ([]byte, error) {
 	mode := cipher.NewCBCDecrypter(block, iv)
 	plainText := make([]byte, len(cipherText))
 	mode.CryptBlocks(plainText, cipherText)
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Padded Alert Length : %d , Padded ALert : %v", len(plainText), plainText)))
+	//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Padded Alert Length : %d , Padded ALert : %v", len(plainText), plainText)))
 	unPadText, err := UnPad(plainText, block.BlockSize())
 	if err != nil {
 		return nil, err

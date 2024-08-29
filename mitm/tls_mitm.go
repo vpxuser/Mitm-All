@@ -109,7 +109,7 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return
 	}
-	ctx.HandshakeRawList = append(ctx.HandshakeRawList, finishedRaw)
+	//ctx.HandshakeRawList = append(ctx.HandshakeRawList, finishedRaw)
 	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[finishedRaw[0]]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[HandshakeTypeFinished])))
 	finished, err := ParseRecord(finishedRaw, ctx)
 	if err != nil {

@@ -43,15 +43,19 @@ func ParseFinished(data []byte, ctx *Context) (*Finished, error) {
 	finished := &Finished{}
 	copy(*finished, data)
 	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+	//finishedKey := PRF(clientKeyExchange.MasterSecret, []byte(LabelKeyExpansion), nil, 12)
+	//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Finished Key Length : %d , Finished Key Data : %v", len(finishedKey), finishedKey)))
+	//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(data), data)))
+	//expectData := HmacHash(finishedKey, comm.CombineHash(ctx.HandshakeRawList, sha256.New), sha256.New)
+	expectData := PRF(clientKeyExchange.MasterSecret, []byte(LabelClientFinished), comm.CombineHash(ctx.HandshakeRawList, sha256.New), 12)
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Expect Data Length : %d , Expect Data : %v", len(expectData), expectData)))
 	verifyData, err := crypt.DecryptAESCBC(data, clientKeyExchange.ClientKey, clientKeyExchange.ClientIV)
 	if err != nil {
 		return nil, err
 	}
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(data), data)))
-	seed := sha256.Sum256(comm.Combine(ctx.HandshakeRawList))
-	expectData := PRF(clientKeyExchange.MasterSecret, []byte(LabelClientFinished), seed[:], 12)
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Expect Data Length : %d , Expect Data : %v", len(expectData), expectData)))
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
 	if hmac.Equal(verifyData, expectData) {
+		//if hmac.Equal(data, expectData) {
 		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Client Finished Success")))
 	} else {
 		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Client Finished Failed")))

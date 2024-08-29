@@ -1,11 +1,13 @@
 package comm
 
-import "bytes"
+import (
+	"hash"
+)
 
-func Combine(datas [][]byte) []byte {
-	var combined bytes.Buffer
+func CombineHash(datas [][]byte, hashFunc func() hash.Hash) []byte {
+	h := hashFunc()
 	for _, data := range datas {
-		combined.Write(data)
+		h.Write(data)
 	}
-	return combined.Bytes()
+	return h.Sum(nil)
 }
