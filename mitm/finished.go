@@ -63,7 +63,7 @@ func ParseFinished(data []byte, ctx *Context) (*Finished, error) {
 		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Finished Verify Failed")))
 	}
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("MAC Length : %d , MAC Data : %v", len(MAC), MAC)))
-	A := append([]byte{0, 0, 0, 0, 0, 0, 0, 0x01, 0x16, 0x03, 0x03, 0x10}, plainData[:16]...)
+	A := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0x16, 0x03, 0x03, 0x00, 0x10}, plainData[:16]...)
 	yaklog.Debugf("A : %v", A)
 	expectMAC := HmacHash(clientKeyExchange.ClientMacKey, A, sha1.New)
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Expect MAC Length : %d , Expect MAC Data : %v", len(expectMAC), expectMAC)))
