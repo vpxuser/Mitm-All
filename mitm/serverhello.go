@@ -12,7 +12,7 @@ type ServerHello struct {
 	CipherSuite       uint16      `json:"cipherSuite"`
 	CompressionMethod uint8       `json:"compressionMethod"`
 	ExtensionsLength  uint16      `json:"extensionsLength"`
-	Extensions        []Extension `json:"extensions"`
+	Extensions        []Extension `json:"extensions,omitempty"`
 }
 
 func (s *ServerHello) GetRaw() []byte {

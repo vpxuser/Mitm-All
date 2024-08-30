@@ -26,7 +26,7 @@ type Context struct {
 	KeyExchangeAlgorithm uint8
 	KeyDER               *rsa.PrivateKey
 	CertDER              *x509.Certificate
-	HandshakeRawList     [][]byte
+	HandshakeMessages    [][]byte
 	ClientHello          Record
 	ServerHello          Record
 	Certificate          Record

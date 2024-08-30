@@ -24,7 +24,7 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return
 	}
-	ctx.HandshakeRawList = append(ctx.HandshakeRawList, clientHelloRaw)
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, clientHelloRaw[5:])
 	clientHello, err := ParseRecord(clientHelloRaw, ctx)
 	if err != nil {
 		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
@@ -46,7 +46,7 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 	}
 	ctx.ServerHello = *serverHello
 	serverHelloRaw := serverHello.GetRaw()
-	ctx.HandshakeRawList = append(ctx.HandshakeRawList, serverHelloRaw)
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, serverHelloRaw[5:])
 	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[serverHello.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[serverHello.Handshake.HandshakeType])))
 	if _, err = client.Write(serverHelloRaw); err != nil {
 		yaklog.Errorf("%s write Server Hello failed : %v", ctx.Mitm2ClientLog, err)
@@ -60,7 +60,7 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 	}
 	ctx.Certificate = *certificate
 	certificateRaw := certificate.GetRaw()
-	ctx.HandshakeRawList = append(ctx.HandshakeRawList, certificateRaw)
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, certificateRaw[5:])
 	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[certificate.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[certificate.Handshake.HandshakeType])))
 	if _, err = client.Write(certificateRaw); err != nil {
 		yaklog.Errorf("%s write Certificate failed : %v", ctx.Mitm2ClientLog, err)
@@ -70,7 +70,7 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 	serverHelloDone := NewServerHelloDone(ctx)
 	ctx.ServerHelloDone = *serverHelloDone
 	serverHelloDoneRaw := serverHelloDone.GetRaw()
-	ctx.HandshakeRawList = append(ctx.HandshakeRawList, serverHelloDoneRaw)
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, serverHelloDoneRaw[5:])
 	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[serverHelloDone.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[serverHelloDone.Handshake.HandshakeType])))
 	if _, err = client.Write(serverHelloDoneRaw); err != nil {
 		yaklog.Errorf("%s write Server Hello Done failed : %v", ctx.Mitm2ClientLog, err)
@@ -83,7 +83,7 @@ func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return
 	}
-	ctx.HandshakeRawList = append(ctx.HandshakeRawList, clientKeyExchangeRaw)
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, clientKeyExchangeRaw[5:])
 	clientKeyExchange, err := ParseRecord(clientKeyExchangeRaw, ctx)
 	if err != nil {
 		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)

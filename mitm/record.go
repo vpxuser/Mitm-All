@@ -69,9 +69,9 @@ type Record struct {
 	ContentType      uint8     `json:"contentType"` //1 byte
 	Version          uint16    `json:"version"`     //2 byte
 	Length           uint16    `json:"length"`      //2 byte
-	Handshake        Handshake `json:"handshake"`
-	ChangeCipherSpec uint8     `json:"changeCipherSpec"`
-	Fragment         []byte    `json:"fragment"`
+	Handshake        Handshake `json:"handshake,omitempty"`
+	ChangeCipherSpec uint8     `json:"changeCipherSpec,omitempty"`
+	Fragment         []byte    `json:"fragment,omitempty"`
 }
 
 func ParseRecord(data []byte, ctx *Context) (*Record, error) {
@@ -92,6 +92,7 @@ func ParseRecord(data []byte, ctx *Context) (*Record, error) {
 	record.Fragment = data[5 : 5+record.Length]
 	switch record.ContentType {
 	case ContentTypeHandshake:
+		yaklog.Debugf("Content Length : %d", record.Length)
 		handshake, err := ParseHandshake(record.Fragment, ctx)
 		if err != nil {
 			return nil, fmt.Errorf("parse Handshake failed: %v", err)
@@ -228,7 +229,7 @@ func NewServerHelloDone(ctx *Context) *Record {
 
 func NewFinished(ctx *Context) (*Record, error) {
 	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
-	verifyData := PRF(clientKeyExchange.MasterSecret, []byte(LabelServerFinished), comm.CombineHash(ctx.HandshakeRawList, sha256.New), 12)
+	verifyData := PRF(clientKeyExchange.MasterSecret, []byte(LabelServerFinished), comm.CombineHash(ctx.HandshakeMessages, sha256.New), 12)
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
 	chiperVerifyData, err := crypt.EncryptAESCBC(verifyData, clientKeyExchange.ServerKey, clientKeyExchange.ServerIV)
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Chiper Verify Data Length : %d , Chiper Verify Data: %v", len(chiperVerifyData), chiperVerifyData)))

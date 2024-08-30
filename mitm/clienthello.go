@@ -16,7 +16,7 @@ type ClientHello struct {
 	CompressionMethodsLength uint8       `json:"compressionMethodsLength"`
 	CompressionMethods       []uint8     `json:"compressionMethods"`
 	ExtensionsLength         uint16      `json:"extensionsLength"`
-	Extensions               []Extension `json:"extensions"`
+	Extensions               []Extension `json:"extensions,omitempty"`
 }
 
 // ParseClientHello 解析Clienthello函数

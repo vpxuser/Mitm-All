@@ -2,6 +2,7 @@ package mitm
 
 import (
 	"crypto/hmac"
+	"crypto/sha1"
 	"crypto/sha256"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
@@ -43,22 +44,33 @@ func ParseFinished(data []byte, ctx *Context) (*Finished, error) {
 	finished := &Finished{}
 	copy(*finished, data)
 	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
-	//finishedKey := PRF(clientKeyExchange.MasterSecret, []byte(LabelKeyExpansion), nil, 12)
-	//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Finished Key Length : %d , Finished Key Data : %v", len(finishedKey), finishedKey)))
-	//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(data), data)))
-	//expectData := HmacHash(finishedKey, comm.CombineHash(ctx.HandshakeRawList, sha256.New), sha256.New)
-	expectData := PRF(clientKeyExchange.MasterSecret, []byte(LabelClientFinished), comm.CombineHash(ctx.HandshakeRawList, sha256.New), 12)
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Expect Data Length : %d , Expect Data : %v", len(expectData), expectData)))
-	verifyData, err := crypt.DecryptAESCBC(data, clientKeyExchange.ClientKey, clientKeyExchange.ClientIV)
+	iv, chiperData := data[:16], data[16:]
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("IV Length : %d , IV Data : %v", len(iv), iv)))
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Chiper Data Length : %d , Chiper Data Data : %v", len(chiperData), chiperData)))
+	plainData, err := crypt.DecryptAESCBC(chiperData, clientKeyExchange.ClientKey, iv)
 	if err != nil {
 		return nil, err
 	}
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Plain Length : %d , Plain Data : %v", len(plainData), plainData)))
+	handshakeHeader, verifyData, MAC := plainData[:4], plainData[4:16], plainData[16:36]
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Handshake Header Length : %d , Handshake Header Data : %v", len(handshakeHeader), handshakeHeader)))
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
-	if hmac.Equal(verifyData, expectData) {
-		//if hmac.Equal(data, expectData) {
-		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Client Finished Success")))
+	expectVerifyData := PRF(clientKeyExchange.MasterSecret, []byte(LabelClientFinished), comm.CombineHash(ctx.HandshakeMessages, sha256.New), len(verifyData))
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Expect Verify Data Length : %d , Expect Verify Data : %v", len(expectVerifyData), expectVerifyData)))
+	if hmac.Equal(verifyData, expectVerifyData) {
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Finished Verify Success")))
 	} else {
-		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Client Finished Failed")))
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Finished Verify Failed")))
+	}
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("MAC Length : %d , MAC Data : %v", len(MAC), MAC)))
+	A := append([]byte{0, 0, 0, 0, 0, 0, 0, 0x01, 0x16, 0x03, 0x03, 0x10}, plainData[:16]...)
+	yaklog.Debugf("A : %v", A)
+	expectMAC := HmacHash(clientKeyExchange.ClientMacKey, A, sha1.New)
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Expect MAC Length : %d , Expect MAC Data : %v", len(expectMAC), expectMAC)))
+	if hmac.Equal(MAC, expectMAC) {
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("MAC Verify Success")))
+	} else {
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("MAC Verify Failed")))
 	}
 	return finished, nil
 }
