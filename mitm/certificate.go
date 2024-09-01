@@ -41,8 +41,7 @@ func (c *Certificate) GetRaw() []byte {
 	certificates := certificatesLength
 	for _, certificate := range c.Certificates {
 		certificateLength := []byte{byte(certificate.CertificateLength >> 16), byte(certificate.CertificateLength >> 8), byte(certificate.CertificateLength)}
-		certificates = append(certificates, certificateLength...)
-		certificates = append(certificates, certificate.Certificate...)
+		certificates = append(certificates, append(certificateLength, certificate.Certificate...)...)
 	}
 	return certificates
 }

@@ -1,6 +1,8 @@
 package mitm
 
 import (
+	"crypto/hmac"
+	"crypto/sha1"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"socks2https/pkg/comm"
@@ -92,17 +94,39 @@ func ParseAlert(data []byte, ctx *Context) (*Alert, error) {
 		alert.Level, alert.Description = data[0], data[1]
 		return alert, nil
 	} else if len(data) > 2 {
-		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Cipher Alert Length : %d , Cipher ALert : %v", len(data), data)))
-		clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
-		fragment, err := crypt.DecryptAESCBC(data, clientKeyExchange.ClientKey, clientKeyExchange.ClientIV)
+		iv, encryptedAlert := data[:16], data[16:]
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Encrypt Alert Length : %d , Encrypt Alert : %v", len(encryptedAlert), encryptedAlert)))
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("IV Length : %d , IV : %v", len(iv), iv)))
+		clientKeyexchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+		paddingData, err := crypt.AESCBCDecrypt(encryptedAlert, clientKeyexchange.ClientKey, iv)
 		if err != nil {
 			return nil, err
 		}
-		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Plain Alert Length : %d , Plain ALert : %v", len(fragment), fragment)))
-		msg := fragment[:len(fragment)-20]
-		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Alert Length : %d , ALert : %v", len(msg), msg)))
-		alert.Level, alert.Description = msg[0], msg[1]
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Padding Data Length : %d , Padding Data : %v", len(paddingData), paddingData)))
+		alertRaw := paddingData[:2]
+		//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("MAC The Encrypt Length : %d , MAC The Encrypt : %v", len(MACTheEncrypt), MACTheEncrypt)))
+		//clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+		//fragment, err := crypt.DecryptAESCBC(data, clientKeyExchange.ClientKey, clientKeyExchange.ClientIV)
+		//if err != nil {
+		//	return nil, err
+		//}
+		//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Plain Alert Length : %d , Plain ALert : %v", len(alertRaw), alertRaw)))
+		//msg := fragment[:len(fragment)-20]
+		alert.Level, alert.Description = alertRaw[0], alertRaw[1]
+		mac := crypt.MAC(clientKeyexchange.ClientMacKey, 1, NewAlert(alert.Level, alert.Description).GetRaw(), sha1.New)
+		yaklog.Debugf("Except MAC Length : %d , Except MAC : %v", len(mac), mac)
+		yaklog.Debugf("MAC Length : %d , MAC : %v", len(paddingData[2:22]), paddingData[2:22])
+		if hmac.Equal(paddingData[2:22], mac) {
+			yaklog.Debugf("MAC Verify Successful")
+		} else {
+			yaklog.Debugf("MAC Verify Failed")
+		}
+		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Alert Length : %d , ALert : %v", len(alertRaw), alertRaw)))
 		return alert, nil
 	}
 	return nil, fmt.Errorf("Alert is invaild")
+}
+
+func (a *Alert) GetRaw() []byte {
+	return []byte{a.Level, a.Description}
 }

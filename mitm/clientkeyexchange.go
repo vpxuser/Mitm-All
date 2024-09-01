@@ -1,7 +1,6 @@
 package mitm
 
 import (
-	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -16,25 +15,6 @@ const (
 	KeyExchangeDHE
 	KeyExchangeECDHE
 	KeyExchangePSK
-)
-
-const (
-	LabelMasterSecret             = "master secret"
-	LabelKeyExpansion             = "key expansion"
-	LabelClientFinished           = "client finished"
-	LabelServerFinished           = "server finished"
-	LabelClientEAPMasterSecret    = "client EAP master secret"
-	LabelServerEAPMasterSecret    = "server EAP master secret"
-	LabelExtendedMasterSecret     = "extended master secret"
-	LabelResumptionMasterSecret   = "resumption master secret"
-	LabelExporterMasterSecret     = "exporter master secret"
-	LabelEarlyTrafficSecret       = "early traffic secret"
-	LabelHandshakeTrafficSecret   = "handshake traffic secret"
-	LabelApplicationTrafficSecret = "application traffic secret"
-	LabelExporter                 = "EXPORTER"
-	LabelFinished                 = "finished"
-	LabelBinding                  = "binding"
-	LabelSessionTicket            = "session ticket"
 )
 
 // ClientKeyExchange 定义 ClientKeyExchange 的通用接口
@@ -58,29 +38,13 @@ type RSAClientKeyExchange struct {
 	ServerMacKey            []byte
 }
 
-func HmacHash(secret, A []byte, hashFunc func() hash.Hash) []byte {
-	hmacFunc := hmac.New(hashFunc, secret)
-	hmacFunc.Write(A)
-	return hmacFunc.Sum(nil)
-}
-
-func PHash(secret, seed []byte, outputLength int, hashFunc func() hash.Hash) []byte {
-	var result []byte
-	A := seed
-	for len(result) < outputLength {
-		A = HmacHash(secret, A, hashFunc)
-		result = append(result, HmacHash(secret, append(A, seed...), hashFunc)...)
-	}
-	return result
-}
-
 func TLS12PRF(secret, label, seed []byte, outputLength int, hashFunc func() hash.Hash) []byte {
-	return PHash(secret, append(label, seed...), outputLength, hashFunc)[:outputLength]
+	return crypt.PHash(secret, append(label, seed...), outputLength, hashFunc)[:outputLength]
 }
 
 func PRF(secret, label, seed []byte, length int) []byte {
 	switch binary.BigEndian.Uint16(secret[:2]) {
-	case VersionTLS12:
+	case VersionTLS102:
 		return TLS12PRF(secret, label, seed, length, sha256.New)
 	default:
 		return TLS12PRF(secret, label, seed, length, sha256.New)
@@ -106,9 +70,9 @@ func (r *RSAClientKeyExchange) Parse(data []byte, ctx *Context) error {
 	yaklog.Debugf("Client Random : %v", ctx.ClientHello.Handshake.ClientHello.Random)
 	yaklog.Debugf("Server Random : %v", ctx.ServerHello.Handshake.ServerHello.Random)
 	seed := append(ctx.ClientHello.Handshake.ClientHello.Random[:], ctx.ServerHello.Handshake.ServerHello.Random[:]...)
-	masterSecret := PRF(preMasterSecret, []byte(LabelMasterSecret), seed, len(preMasterSecret))
+	masterSecret := PRF(preMasterSecret, []byte(crypt.LabelMasterSecret), seed, len(preMasterSecret))
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("MasterSecret Length : %d , MasterSecret : %v", len(masterSecret), masterSecret)))
-	r.MasterSecret = masterSecret
+	r.MasterSecret, ctx.MasterSecret = masterSecret, masterSecret
 
 	macKeyLength, keyLength, ivLength := 0, 0, 0
 	switch ctx.CipherSuite {
@@ -117,10 +81,11 @@ func (r *RSAClientKeyExchange) Parse(data []byte, ctx *Context) error {
 	}
 
 	seed = append(ctx.ServerHello.Handshake.ServerHello.Random[:], ctx.ClientHello.Handshake.ClientHello.Random[:]...)
-	r.KeyBlock = PRF(masterSecret, []byte(LabelKeyExpansion), seed, 2*(macKeyLength+keyLength+ivLength))
+	r.KeyBlock = PRF(masterSecret, []byte(crypt.LabelKeyExpansion), seed, 2*(macKeyLength+keyLength+ivLength))
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Key Expansion Length : %d , Key Expansion : %v", len(r.KeyBlock), r.KeyBlock)))
 
-	r.ClientMacKey, r.ServerMacKey, r.ClientKey, r.ServerKey, r.ClientIV, r.ServerIV = r.KeyBlock[:macKeyLength], r.KeyBlock[macKeyLength:2*macKeyLength], r.KeyBlock[2*macKeyLength:2*macKeyLength+keyLength], r.KeyBlock[2*macKeyLength+keyLength:2*macKeyLength+2*keyLength], r.KeyBlock[2*macKeyLength+2*keyLength:2*macKeyLength+2*keyLength+ivLength], r.KeyBlock[2*macKeyLength+2*keyLength+ivLength:]
+	r.ClientMacKey, r.ServerMacKey, r.ClientKey, r.ServerKey, r.ClientIV, r.ServerIV = r.KeyBlock[:macKeyLength], r.KeyBlock[macKeyLength:2*macKeyLength], r.KeyBlock[2*macKeyLength:2*macKeyLength+keyLength], r.KeyBlock[2*macKeyLength+keyLength:2*(macKeyLength+keyLength)], r.KeyBlock[2*(macKeyLength+keyLength):2*(macKeyLength+keyLength)+ivLength], r.KeyBlock[2*(macKeyLength+keyLength)+ivLength:]
+	ctx.ClientMACKey, ctx.ServerMACKey, ctx.ClientKey, ctx.ServerKey, ctx.ClientIV, ctx.ServerIV = r.KeyBlock[:macKeyLength], r.KeyBlock[macKeyLength:2*macKeyLength], r.KeyBlock[2*macKeyLength:2*macKeyLength+keyLength], r.KeyBlock[2*macKeyLength+keyLength:2*(macKeyLength+keyLength)], r.KeyBlock[2*(macKeyLength+keyLength):2*(macKeyLength+keyLength)+ivLength], r.KeyBlock[2*(macKeyLength+keyLength)+ivLength:]
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Client Mac Keys Length : %d , Client Mac Keys : %v", len(r.ClientMacKey), r.ClientMacKey)))
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Server Mac Keys Length : %d , Server Mac Keys : %v", len(r.ServerMacKey), r.ServerMacKey)))
 	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Client Key Length : %d , Client Key : %v", len(r.ClientKey), r.ClientKey)))

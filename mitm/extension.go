@@ -1,9 +1,10 @@
 package mitm
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
+	yaklog "github.com/yaklang/yaklang/common/log"
+	"socks2https/pkg/comm"
 )
 
 const (
@@ -34,8 +35,8 @@ const (
 type Extension struct {
 	Type       uint16     `json:"type"`
 	Length     uint16     `json:"length"`
-	ServerName ServerName `json:"serverName"`
-	Payload    []byte     `json:"payload"`
+	Payload    []byte     `json:"payload,omitempty"`
+	ServerName ServerName `json:"serverName,omitempty"`
 }
 
 type ServerName struct {
@@ -51,15 +52,11 @@ func ParseServerName(data []byte) (*ServerName, error) {
 	if len(data) < 2 {
 		return nil, fmt.Errorf("Extension Data is invaild")
 	}
-	serverName := &ServerName{}
-	offset := 0
-	serverName.ListLength = binary.BigEndian.Uint16(data[offset : offset+2])
-	offset += 2
-	serverName.List = make([]struct {
-		Type   uint8  `json:"type"`
-		Length uint16 `json:"length"`
-		Name   string `json:"name"`
-	}, 0)
+	serverName := &ServerName{ListLength: binary.BigEndian.Uint16(data[:2])}
+	if len(data) != 2+int(serverName.ListLength) {
+		return nil, fmt.Errorf("Extension Data is incomplete")
+	}
+	offset := 2
 	for i := 0; offset < len(data); i++ {
 		if offset+3 > len(data) {
 			return nil, fmt.Errorf("Server Name Payload is invalid")
@@ -69,10 +66,8 @@ func ParseServerName(data []byte) (*ServerName, error) {
 			Length uint16 `json:"length"`
 			Name   string `json:"name"`
 		}{}
-		payload.Type = data[offset]
-		offset += 1
-		payload.Length = binary.BigEndian.Uint16(data[offset : offset+2])
-		offset += 2
+		payload.Type, payload.Length = data[offset], binary.BigEndian.Uint16(data[offset:offset+2])
+		offset += 3
 		index := offset + int(payload.Length)
 		if index > len(data) {
 			return nil, fmt.Errorf("Server Name Length is invalid")
@@ -99,18 +94,17 @@ func (s *ServerName) GetRaw() []byte {
 }
 
 func ParseExtension(data []byte) (*Extension, error) {
-	reader := bytes.NewReader(data)
-	extension := &Extension{}
-	if err := binary.Read(reader, binary.BigEndian, &extension.Type); err != nil {
-		return nil, fmt.Errorf("failed to read Extension type : %v", err)
+	if len(data) < 4 {
+		return nil, fmt.Errorf("Extension Data is invaild")
 	}
-	if err := binary.Read(reader, binary.BigEndian, &extension.Length); err != nil {
-		return nil, fmt.Errorf("failed to read Extension length : %v", err)
+	extension := &Extension{
+		Type:   binary.BigEndian.Uint16(data[0:2]),
+		Length: binary.BigEndian.Uint16(data[2:4]),
 	}
-	extension.Payload = make([]byte, extension.Length)
-	if _, err := reader.Read(extension.Payload[:]); err != nil {
-		return nil, fmt.Errorf("failed to read Extension Payload : %v", err)
+	if len(data) < 4+int(extension.Length) {
+		return nil, fmt.Errorf("Extension Data is incomplete")
 	}
+	extension.Payload = data[4 : 4+extension.Length]
 	switch extension.Type {
 	case ExtensionTypeServerName:
 		serverName, err := ParseServerName(extension.Payload)
@@ -128,10 +122,13 @@ func (e *Extension) GetRaw() []byte {
 	length := make([]byte, 2)
 	binary.BigEndian.PutUint16(length, e.Length)
 	extension := append(typ, length...)
-	switch true {
-	case &e.ServerName != nil:
-		return append(extension, e.ServerName.GetRaw()...)
-	default:
-		return append(extension, e.Payload...)
+	if e.Payload == nil {
+		switch e.Type {
+		case ExtensionTypeServerName:
+			return append(extension, e.ServerName.GetRaw()...)
+		default:
+			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Extension Type : %d", e.Type)))
+		}
 	}
+	return append(extension, e.Payload...)
 }

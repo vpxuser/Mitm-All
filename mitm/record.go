@@ -2,6 +2,7 @@ package mitm
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
@@ -35,11 +36,11 @@ const (
 
 // TLS 版本
 const (
-	VersionSSL30 uint16 = 0x0300 // SSL 3.0
-	VersionTLS10 uint16 = 0x0301 // TLS 1.0
-	VersionTLS11 uint16 = 0x0302 // TLS 1.1
-	VersionTLS12 uint16 = 0x0303 // TLS 1.2
-	VersionTLS13 uint16 = 0x0304 // TLS 1.3
+	VersionSSL300 uint16 = 0x0300 // SSL 3.0
+	VersionTLS100 uint16 = 0x0301 // TLS 1.0
+	VersionTLS101 uint16 = 0x0302 // TLS 1.1
+	VersionTLS102 uint16 = 0x0303 // TLS 1.2
+	VersionTLS103 uint16 = 0x0304 // TLS 1.3
 )
 
 var ContentType = map[uint8]string{
@@ -57,51 +58,65 @@ var ContentType = map[uint8]string{
 	ContentTypeCustomExperimental:  "Custom Experimental",
 }
 
+type TLSPlaintext struct {
+	ContentType uint8
+	Version     uint16
+	Length      uint16
+	Fragment    []byte
+}
+
+type TLSCompressed struct {
+	ContentType uint8
+	Version     uint16
+	Length      uint16
+	Fragment    []byte
+}
+
+type TLSCiphertext struct {
+	ContentType uint8
+	Version     uint16
+	Length      uint16
+	Fragment    []byte
+}
+
 var Version = map[uint16]string{
-	VersionSSL30: "TLS Version SSL30",
-	VersionTLS10: "TLS Version TLS10",
-	VersionTLS11: "TLS Version TLS11",
-	VersionTLS12: "TLS Version TLS12",
-	VersionTLS13: "TLS Version TLS13",
+	VersionSSL300: "TLS Version SSL 3.0",
+	VersionTLS100: "TLS Version TLS 1.0",
+	VersionTLS101: "TLS Version TLS 1.1",
+	VersionTLS102: "TLS Version TLS 1.2",
+	VersionTLS103: "TLS Version TLS 1.3",
 }
 
 type Record struct {
-	ContentType      uint8     `json:"contentType"` //1 byte
-	Version          uint16    `json:"version"`     //2 byte
-	Length           uint16    `json:"length"`      //2 byte
-	Handshake        Handshake `json:"handshake,omitempty"`
-	ChangeCipherSpec uint8     `json:"changeCipherSpec,omitempty"`
-	Fragment         []byte    `json:"fragment,omitempty"`
+	ContentType      uint8            `json:"contentType"` //1 byte
+	Version          uint16           `json:"version"`     //2 byte
+	Length           uint16           `json:"length"`      //2 byte
+	Fragment         []byte           `json:"fragment,omitempty"`
+	Handshake        Handshake        `json:"handshake,omitempty"`
+	ChangeCipherSpec ChangeCipherSpec `json:"changeCipherSpec,omitempty"`
+	Alert            Alert            `json:"alert,omitempty"`
 }
 
-func ParseRecord(data []byte, ctx *Context) (*Record, error) {
-	reader := bytes.NewReader(data)
-	record := &Record{}
-	if err := binary.Read(reader, binary.BigEndian, &record.ContentType); err != nil {
-		return nil, fmt.Errorf("parse TLS Record Content Type failed: %v", err)
+func NewBlockRecord(record *Record, ctx *Context) ([]byte, error) {
+	seqNum := make([]byte, 8)
+	binary.BigEndian.PutUint64(seqNum, ctx.ServerSeqNum)
+	mac := crypt.HmacHash(ctx.ServerMACKey, append(seqNum, record.GetRaw()...), ctx.HashFunc)
+	plainFragment := append(record.Fragment, mac...)
+	ctx.ServerSeqNum++
+	paddingLength := ctx.BlockLength - len(plainFragment)%ctx.BlockLength
+	padding := bytes.Repeat([]byte{byte(paddingLength)}, paddingLength)
+	cipherFragment, err := crypt.AESCBCEncrypt(append(plainFragment, append(mac, append(padding, byte(paddingLength))...)...), ctx.ServerKey, ctx.ServerIV)
+	if err != nil {
+		return nil, err
 	}
-	if err := binary.Read(reader, binary.BigEndian, &record.Version); err != nil {
-		return nil, fmt.Errorf("parse TLS Record Version failed: %v", err)
+	finalFragment := append(ctx.ServerIV, cipherFragment...)
+	blockRecord := &Record{
+		ContentType: record.ContentType,
+		Version:     record.Version,
+		Length:      uint16(len(finalFragment)),
+		Fragment:    finalFragment,
 	}
-	if err := binary.Read(reader, binary.BigEndian, &record.Length); err != nil {
-		return nil, fmt.Errorf("parse TLS Record Length failed: %v", err)
-	}
-	if len(data) < 5+int(record.Length) {
-		return nil, fmt.Errorf("TLS Record Fragment is incomplete")
-	}
-	record.Fragment = data[5 : 5+record.Length]
-	switch record.ContentType {
-	case ContentTypeHandshake:
-		yaklog.Debugf("Content Length : %d", record.Length)
-		handshake, err := ParseHandshake(record.Fragment, ctx)
-		if err != nil {
-			return nil, fmt.Errorf("parse Handshake failed: %v", err)
-		}
-		record.Handshake = *handshake
-	case ContentTypeChangeCipherSpec:
-		record.ChangeCipherSpec = 0x01
-	}
-	return record, nil
+	return blockRecord.GetRaw(), nil
 }
 
 func (r *Record) GetRaw() []byte {
@@ -111,15 +126,85 @@ func (r *Record) GetRaw() []byte {
 	length := make([]byte, 2)
 	binary.BigEndian.PutUint16(length, r.Length)
 	record = append(record, length...)
-	if len(r.Fragment) == 0 {
+	if r.Fragment == nil {
 		switch r.ContentType {
 		case ContentTypeHandshake:
 			return append(record, r.Handshake.GetRaw()...)
+		case ContentTypeChangeCipherSpec:
+			return append(record, r.ChangeCipherSpec.GetRaw()...)
+		case ContentTypeAlert:
+			return append(record, r.Alert.GetRaw()...)
 		default:
-			break
+			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Content Type : %v", r.ContentType)))
 		}
 	}
 	return append(record, r.Fragment...)
+}
+
+func ParseBlockRecord(blockRecord []byte, ctx *Context) (*Record, error) {
+	plainRecord := blockRecord[:3]
+	iv := blockRecord[5 : 5+ctx.BlockLength]
+	paddingFragment, err := crypt.AESCBCDecrypt(blockRecord[5+ctx.BlockLength:], ctx.ClientKey, iv)
+	if err != nil {
+		return nil, err
+	}
+	paddingLength := paddingFragment[len(paddingFragment)-1]
+	plainFragment := paddingFragment[:len(paddingFragment)-int(paddingLength)-1]
+	fragment, mac := plainFragment[:len(plainFragment)-ctx.MACLength], plainFragment[len(plainFragment)-ctx.MACLength:]
+	fragmentLength := make([]byte, 2)
+	binary.BigEndian.PutUint16(fragmentLength, uint16(len(fragment)))
+	plainRecord = append(plainRecord, append(fragmentLength, fragment...)...)
+	seqNum := make([]byte, 8)
+	binary.BigEndian.PutUint64(seqNum, ctx.ClientSeqNum)
+	verifyMAC := crypt.HmacHash(ctx.ClientMACKey, append(seqNum, plainRecord...), ctx.HashFunc)
+	ctx.ClientSeqNum++
+	//todo
+	if !hmac.Equal(mac, verifyMAC) {
+		yaklog.Debugf("Verify MAC Successful")
+	} else {
+		yaklog.Debugf("Verify MAC Failed")
+	}
+	record, err := ParseRecord(plainRecord, ctx)
+	if err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func ParseRecord(data []byte, ctx *Context) (*Record, error) {
+	if len(data) < 5 {
+		return nil, fmt.Errorf("TLS Record is invaild")
+	}
+	record := &Record{
+		ContentType: data[0],
+		Version:     binary.BigEndian.Uint16(data[1:3]),
+		Length:      binary.BigEndian.Uint16(data[3:5]),
+	}
+	if len(data) != 5+int(record.Length) {
+		return nil, fmt.Errorf("TLS Record Fragment is incomplete")
+	}
+	record.Fragment = data[5 : 5+record.Length]
+	switch record.ContentType {
+	case ContentTypeHandshake:
+		handshake, err := ParseHandshake(record.Fragment, ctx)
+		if err != nil {
+			return nil, err
+		}
+		record.Handshake = *handshake
+	case ContentTypeChangeCipherSpec:
+		changeCipherSpec, err := ParseChangeCipherSpec(data[5+record.Length:])
+		if err != nil {
+			return nil, err
+		}
+		record.ChangeCipherSpec = *changeCipherSpec
+	case ContentTypeAlert:
+		alert, err := ParseAlert(record.Fragment, ctx)
+		if err != nil {
+			return nil, err
+		}
+		record.Alert = *alert
+	}
+	return record, nil
 }
 
 func (r *Record) GetDomain() (string, bool) {
@@ -227,19 +312,50 @@ func NewServerHelloDone(ctx *Context) *Record {
 	}
 }
 
-func NewFinished(ctx *Context) (*Record, error) {
-	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
-	verifyData := PRF(clientKeyExchange.MasterSecret, []byte(LabelServerFinished), comm.CombineHash(ctx.HandshakeMessages, sha256.New), 12)
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
-	chiperVerifyData, err := crypt.EncryptAESCBC(verifyData, clientKeyExchange.ServerKey, clientKeyExchange.ServerIV)
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Chiper Verify Data Length : %d , Chiper Verify Data: %v", len(chiperVerifyData), chiperVerifyData)))
-	if err != nil {
-		return nil, err
+func NewChangeCipherSpec() *Record {
+	return &Record{
+		ContentType: ContentTypeChangeCipherSpec,
+		Version:     VersionTLS102,
+		Length:      1,
+		Fragment:    []byte{0x01},
 	}
+}
+
+func NewFinished(label string, ctx *Context) *Record {
+	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+	yaklog.Debugf("Handshake Messages Length : %d", len(ctx.HandshakeMessages))
+	for i, h := range ctx.HandshakeMessages {
+		yaklog.Debugf("Handshake Messages %d : %v", i, h)
+	}
+	verifyData := PRF(clientKeyExchange.MasterSecret, []byte(label), comm.CombineHash(ctx.HandshakeMessages, sha256.New), 12)
+	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
+	finished := &Finished{VerifyData: verifyData}
+	handshake := &Handshake{
+		HandshakeType: HandshakeTypeFinished,
+		Length:        uint32(len(verifyData)),
+		Finished:      *finished,
+		Payload:       finished.GetRaw(),
+	}
+	handshakeRaw := handshake.GetRaw()
 	return &Record{
 		ContentType: ContentTypeHandshake,
 		Version:     ctx.Version,
-		Length:      uint16(len(chiperVerifyData)),
-		Fragment:    chiperVerifyData,
-	}, nil
+		Length:      uint16(len(handshakeRaw)),
+		Handshake:   *handshake,
+		Fragment:    handshakeRaw,
+	}
+}
+
+func NewAlert(level, description uint8) *Record {
+	alert := &Alert{
+		Level:       level,
+		Description: description,
+	}
+	return &Record{
+		ContentType: ContentTypeAlert,
+		Version:     VersionTLS102,
+		Length:      2,
+		Alert:       *alert,
+		Fragment:    alert.GetRaw(),
+	}
 }

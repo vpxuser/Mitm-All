@@ -2,6 +2,8 @@ package mitm
 
 import (
 	"fmt"
+	yaklog "github.com/yaklang/yaklang/common/log"
+	"socks2https/pkg/comm"
 )
 
 // TLS 握手消息类型
@@ -38,46 +40,47 @@ var HandshakeType = map[byte]string{
 }
 
 type Handshake struct {
-	HandshakeType     uint8             `json:"handshakeType"` // 握手消息类型
-	Length            uint32            `json:"length"`        // 有效载荷长度（3 字节）
+	HandshakeType     uint8             `json:"handshakeType"`     // 握手消息类型
+	Length            uint32            `json:"length"`            // 有效载荷长度（3 字节）
+	Payload           []byte            `json:"payload,omitempty"` // 有效载荷数据
 	ClientHello       ClientHello       `json:"clientHello,omitempty"`
 	ServerHello       ServerHello       `json:"serverHello,omitempty"`
 	Certificate       Certificate       `json:"certificate,omitempty"`
 	ClientKeyExchange ClientKeyExchange `json:"clientKeyExchange,omitempty"`
 	Finished          Finished          `json:"finished,omitempty"`
-	Payload           []byte            `json:"payload,omitempty"` // 有效载荷数据
 }
 
 func ParseHandshake(data []byte, ctx *Context) (*Handshake, error) {
 	if len(data) < 4 {
-		return nil, fmt.Errorf("TLS Handshake is invalid")
+		return nil, fmt.Errorf("TLS Handshake is invaild")
 	}
-	length := uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3])
-	handshake := &Handshake{}
-	if uint32(len(data)) != 4+length {
-		finished, err := ParseFinished(data, ctx)
+	handshake := &Handshake{
+		HandshakeType: data[0],
+		Length:        uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3]),
+	}
+	if len(data) != 4+int(handshake.Length) {
+		return nil, fmt.Errorf("TLS Handshake Payload is incomplete")
+	}
+	handshake.Payload = data[4 : 4+handshake.Length]
+	switch handshake.HandshakeType {
+	case HandshakeTypeClientHello:
+		clientHello, err := ParseClientHello(handshake.Payload)
+		if err != nil {
+			return nil, err
+		}
+		handshake.ClientHello = *clientHello
+	case HandshakeTypeClientKeyExchange:
+		clientKeyExchange, err := ParseClientKeyExchange(handshake.Payload, ctx)
+		if err != nil {
+			return nil, err
+		}
+		handshake.ClientKeyExchange = clientKeyExchange
+	case HandshakeTypeFinished:
+		finished, err := ParseFinished(handshake.Payload, ctx)
 		if err != nil {
 			return nil, err
 		}
 		handshake.Finished = *finished
-	} else {
-		handshake.HandshakeType = data[0]
-		handshake.Length = length
-		handshake.Payload = data[4 : 4+length]
-		switch handshake.HandshakeType {
-		case HandshakeTypeClientHello:
-			clientHello, err := ParseClientHello(handshake.Payload)
-			if err != nil {
-				return nil, err
-			}
-			handshake.ClientHello = *clientHello
-		case HandshakeTypeClientKeyExchange:
-			clientKeyExchange, err := ParseClientKeyExchange(handshake.Payload, ctx)
-			if err != nil {
-				return nil, err
-			}
-			handshake.ClientKeyExchange = clientKeyExchange
-		}
 	}
 	return handshake, nil
 }
@@ -85,22 +88,17 @@ func ParseHandshake(data []byte, ctx *Context) (*Handshake, error) {
 func (h *Handshake) GetRaw() []byte {
 	length := []byte{byte(h.Length >> 16), byte(h.Length >> 8), byte(h.Length)}
 	handshake := append([]byte{h.HandshakeType}, length...)
-	if h.Length > 0 {
+	if h.Payload == nil {
 		switch h.HandshakeType {
 		case HandshakeTypeServerHello:
-			if &h.ServerHello != nil {
-				return append(handshake, h.ServerHello.GetRaw()...)
-			}
-			fallthrough
+			return append(handshake, h.ServerHello.GetRaw()...)
 		case HandshakeTypeCertificate:
-			if &h.Certificate != nil {
-				return append(handshake, h.Certificate.GetRaw()...)
-			}
-			fallthrough
+			return append(handshake, h.Certificate.GetRaw()...)
+		case HandshakeTypeFinished:
+			return append(handshake, h.Finished.GetRaw()...)
 		default:
-			return append(handshake, h.Payload...)
+			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Handshake Type : %d", h.HandshakeType)))
 		}
 	}
-	//yaklog.Debugf("Payload : %s", comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%v", handshake)))
-	return handshake
+	return append(handshake, h.Payload...)
 }

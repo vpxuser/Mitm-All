@@ -21,7 +21,7 @@ const (
 	YELLOW_BG_COLOR_TYPE
 )
 
-var colorMap = map[int]func(arg interface{}) aurora.Value{
+var colorMap = map[int]func(arg any) aurora.Value{
 	RED_COLOR_TYPE:     aurora.BrightRed,
 	YELLOW_COLOR_TYPE:  aurora.BrightYellow,
 	BLUE_COLOR_TYPE:    aurora.BrightBlue,
@@ -34,11 +34,12 @@ var colorMap = map[int]func(arg interface{}) aurora.Value{
 }
 
 // SetColor 设置字符串颜色
-func SetColor(colorType int, payload string) string {
+func SetColor(colorType int, payload any) string {
+	str := fmt.Sprintf("%v", payload)
 	if !setting.NoColor {
-		payload = fmt.Sprint(colorMap[colorType](payload))
+		str = fmt.Sprint(colorMap[colorType](payload))
 	}
-	return payload
+	return str
 }
 
 // DumpRequest 打印更美观的 request 信息

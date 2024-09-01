@@ -19,6 +19,9 @@ type Context struct {
 	Client2TargetLog     string
 	Target2ClientLog     string
 	Version              uint16
+	ClientRandom         [32]byte
+	ServerRandom         [32]byte
+	CipherSuites         []uint16
 	HandshakeType        uint8 //上下文临时存放的数据
 	Domain               string
 	CipherSuite          uint16
@@ -33,14 +36,29 @@ type Context struct {
 	ServerHelloDone      Record
 	ClientKeyExchange    Record
 	Finished             Record
+	MACLength            int
+	BlockLength          int
+	MasterSecret         []byte
+	ClientMACKey         []byte
+	ServerMACKey         []byte
+	ClientKey            []byte
+	ServerKey            []byte
+	ClientIV             []byte
+	ServerIV             []byte
+	ClientEncrypted      bool
+	ServerEncrypted      bool
+	ClientSeqNum         uint64
+	ServerSeqNum         uint64
 }
 
 func NewContext() *Context {
 	return &Context{
 		ContextId:     uuid.New().String(),
-		Version:       VersionTLS12,
+		Version:       VersionTLS102,
 		HandshakeType: 0xFF,
 		CipherSuite:   TLS_RSA_WITH_AES_128_CBC_SHA,
 		HashFunc:      sha1.New,
+		ClientSeqNum:  0,
+		ServerSeqNum:  0,
 	}
 }

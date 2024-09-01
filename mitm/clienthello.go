@@ -1,9 +1,7 @@
 package mitm
 
 import (
-	"bytes"
 	"encoding/binary"
-	"fmt"
 )
 
 type ClientHello struct {
@@ -21,49 +19,36 @@ type ClientHello struct {
 
 // ParseClientHello 解析Clienthello函数
 func ParseClientHello(data []byte) (*ClientHello, error) {
-	reader := bytes.NewReader(data)
-	clientHello := &ClientHello{}
-	if err := binary.Read(reader, binary.BigEndian, &clientHello.Version); err != nil {
-		return nil, fmt.Errorf("parse ClientHello ClientHelloTLSVersion failed : %v", err)
+	clientHello := &ClientHello{
+		Version:         binary.BigEndian.Uint16(data[0:2]),
+		Random:          [32]byte(data[2:34]),
+		SessionIDLength: data[34],
 	}
-	if _, err := reader.Read(clientHello.Random[:]); err != nil {
-		return nil, fmt.Errorf("parse ClientHello Random failed : %v", err)
+	offset := 35
+	clientHello.SessionID = data[offset : offset+int(clientHello.SessionIDLength)]
+	offset += int(clientHello.SessionIDLength)
+	clientHello.CipherSuitesLength = binary.BigEndian.Uint16(data[offset : offset+2])
+	offset += 2
+	for i := 0; i < int(clientHello.CipherSuitesLength/2); i++ {
+		clientHello.CipherSuites = append(clientHello.CipherSuites, binary.BigEndian.Uint16(data[offset:offset+2]))
+		offset += 2
 	}
-	if err := binary.Read(reader, binary.BigEndian, &clientHello.SessionIDLength); err != nil {
-		return nil, fmt.Errorf("parse ClientHello SessionID Length failed : %v", err)
+	clientHello.CompressionMethodsLength = data[offset]
+	offset += 1
+	for i := 0; i < int(clientHello.CompressionMethodsLength); i++ {
+		clientHello.CompressionMethods = append(clientHello.CompressionMethods, data[offset])
+		offset += 1
 	}
-	clientHello.SessionID = make([]byte, clientHello.SessionIDLength)
-	if _, err := reader.Read(clientHello.SessionID); err != nil {
-		return nil, fmt.Errorf("parse ClientHello SessionID failed : %v", err)
-	}
-	if err := binary.Read(reader, binary.BigEndian, &clientHello.CipherSuitesLength); err != nil {
-		return nil, fmt.Errorf("parse ClientHello CipherSuites Length failed : %v", err)
-	}
-	clientHello.CipherSuites = make([]uint16, clientHello.CipherSuitesLength/2)
-	if err := binary.Read(reader, binary.BigEndian, clientHello.CipherSuites); err != nil {
-		return nil, fmt.Errorf("parse ClientHello CipherSuites failed : %v", err)
-	}
-	if err := binary.Read(reader, binary.BigEndian, &clientHello.CompressionMethodsLength); err != nil {
-		return nil, fmt.Errorf("parse ClientHello CompressionMethods Length failed : %v", err)
-	}
-	clientHello.CompressionMethods = make([]uint8, clientHello.CompressionMethodsLength)
-	if _, err := reader.Read(clientHello.CompressionMethods); err != nil {
-		return nil, fmt.Errorf("parse ClientHello CompressionMethods failed : %v", err)
-	}
-	if err := binary.Read(reader, binary.BigEndian, &clientHello.ExtensionsLength); err != nil {
-		return nil, fmt.Errorf("parse ClientHello Extensions Length failed : %v", err)
-	}
-	extensions := make([]byte, clientHello.ExtensionsLength)
-	if _, err := reader.Read(extensions); err != nil {
-		return nil, fmt.Errorf("parse ClientHello Extensions failed : %v", err)
-	}
-	for offset := uint16(0); offset < clientHello.ExtensionsLength; {
-		extension, err := ParseExtension(extensions[offset:])
+	clientHello.ExtensionsLength = binary.BigEndian.Uint16(data[offset : offset+2])
+	offset += 2
+	extensions := data[offset : offset+int(clientHello.ExtensionsLength)]
+	for i := 0; i < int(clientHello.ExtensionsLength); {
+		extension, err := ParseExtension(extensions[i:])
 		if err != nil {
 			return nil, err
 		}
 		clientHello.Extensions = append(clientHello.Extensions, *extension)
-		offset += 2 + 2 + extension.Length
+		i += 2 + 2 + int(extension.Length)
 	}
 	return clientHello, nil
 }

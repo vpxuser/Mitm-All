@@ -8,6 +8,12 @@ import (
 
 func Pad(cipherText []byte, blockSize int) []byte {
 	paddingLen := blockSize - len(cipherText)%blockSize
+	paddingText := bytes.Repeat([]byte{byte(paddingLen - 1)}, paddingLen)
+	return append(cipherText, paddingText...)
+}
+
+func PKCSPad(cipherText []byte, blockSize int) []byte {
+	paddingLen := blockSize - len(cipherText)%blockSize
 	paddingText := bytes.Repeat([]byte{byte(paddingLen)}, paddingLen)
 	return append(cipherText, paddingText...)
 }

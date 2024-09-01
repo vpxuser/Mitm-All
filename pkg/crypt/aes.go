@@ -8,7 +8,7 @@ import (
 	"socks2https/pkg/comm"
 )
 
-func EncryptAESCBC(plainText []byte, key, iv []byte) ([]byte, error) {
+func PKCS7AESCBCEncrypt(plainText []byte, key, iv []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("parse Key failed: %v", err)
@@ -20,7 +20,18 @@ func EncryptAESCBC(plainText []byte, key, iv []byte) ([]byte, error) {
 	return cipherText, nil
 }
 
-func DecryptAESCBC(cipherText []byte, key, iv []byte) ([]byte, error) {
+func AESCBCEncrypt(plainText []byte, key, iv []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("parse Key failed: %v", err)
+	}
+	cipherText := make([]byte, len(plainText))
+	mode := cipher.NewCBCEncrypter(block, iv)
+	mode.CryptBlocks(cipherText, plainText)
+	return cipherText, nil
+}
+
+func AESCBCDecrypt(cipherText []byte, key, iv []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("parse Key failed : %v", err)
@@ -34,7 +45,7 @@ func DecryptAESCBC(cipherText []byte, key, iv []byte) ([]byte, error) {
 	mode := cipher.NewCBCDecrypter(block, iv)
 	plainText := make([]byte, len(cipherText))
 	mode.CryptBlocks(plainText, cipherText)
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Padded Data Length : %d , Padded Data : %v", len(plainText), plainText)))
+	//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Padded Data Length : %d , Padded Data : %v", len(plainText), plainText)))
 	return plainText, nil
 }
 

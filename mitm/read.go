@@ -29,7 +29,7 @@ func HeadProtocol(conn net.Conn, ctx *Context) error {
 	}
 	if maybeTLS {
 		version := binary.BigEndian.Uint16(header[1:3])
-		if version >= VersionSSL30 && version <= VersionTLS13 {
+		if version >= VersionSSL300 && version <= VersionTLS103 {
 			yaklog.Infof("%s %s", ctx.LogTamplate, comm.SetColor(comm.YELLOW_BG_COLOR_TYPE, comm.SetColor(comm.RED_COLOR_TYPE, "use TSL Connection")))
 			TLSMITM(reader, conn, ctx)
 			return nil
