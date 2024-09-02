@@ -39,70 +39,16 @@ type Extension struct {
 	ServerName ServerName `json:"serverName,omitempty"`
 }
 
-type ServerName struct {
-	ListLength uint16 `json:"listLength"`
-	List       []struct {
-		Type   uint8  `json:"type"`
-		Length uint16 `json:"length"`
-		Name   string `json:"name"`
-	} `json:"list"`
-}
-
-func ParseServerName(data []byte) (*ServerName, error) {
-	if len(data) < 2 {
-		return nil, fmt.Errorf("Extension Data is invaild")
-	}
-	serverName := &ServerName{ListLength: binary.BigEndian.Uint16(data[:2])}
-	if len(data) != 2+int(serverName.ListLength) {
-		return nil, fmt.Errorf("Extension Data is incomplete")
-	}
-	offset := 2
-	for i := 0; offset < len(data); i++ {
-		if offset+3 > len(data) {
-			return nil, fmt.Errorf("Server Name Payload is invalid")
-		}
-		payload := struct {
-			Type   uint8  `json:"type"`
-			Length uint16 `json:"length"`
-			Name   string `json:"name"`
-		}{}
-		payload.Type, payload.Length = data[offset], binary.BigEndian.Uint16(data[offset:offset+2])
-		offset += 3
-		index := offset + int(payload.Length)
-		if index > len(data) {
-			return nil, fmt.Errorf("Server Name Length is invalid")
-		}
-		payload.Name = string(data[offset:index])
-		offset += index
-		serverName.List = append(serverName.List, payload)
-	}
-	return serverName, nil
-}
-
-func (s *ServerName) GetRaw() []byte {
-	listLength := make([]byte, 2)
-	binary.BigEndian.PutUint16(listLength, s.ListLength)
-	serverName := listLength
-	for _, payload := range s.List {
-		serverName = append(serverName, payload.Type)
-		length := make([]byte, 2)
-		binary.BigEndian.PutUint16(length, payload.Length)
-		serverName = append(serverName, length...)
-		serverName = append(serverName, []byte(payload.Name)...)
-	}
-	return serverName
-}
-
 func ParseExtension(data []byte) (*Extension, error) {
 	if len(data) < 4 {
-		return nil, fmt.Errorf("Extension Data is invaild")
+		return nil, fmt.Errorf("Extension is invaild")
 	}
 	extension := &Extension{
 		Type:   binary.BigEndian.Uint16(data[0:2]),
 		Length: binary.BigEndian.Uint16(data[2:4]),
 	}
 	if len(data) < 4+int(extension.Length) {
-		return nil, fmt.Errorf("Extension Data is incomplete")
+		return nil, fmt.Errorf("Extension is incomplete")
 	}
 	extension.Payload = data[4 : 4+extension.Length]
 	switch extension.Type {
@@ -131,4 +77,58 @@ func (e *Extension) GetRaw() []byte {
 		}
 	}
 	return append(extension, e.Payload...)
+}
+
+type ServerName struct {
+	ListLength uint16 `json:"listLength"`
+	List       []struct {
+		Type   uint8  `json:"type"`
+		Length uint16 `json:"length"`
+		Name   string `json:"name"`
+	} `json:"list"`
+}
+
+func ParseServerName(data []byte) (*ServerName, error) {
+	if len(data) < 2 {
+		return nil, fmt.Errorf("ServerName is invaild")
+	}
+	serverName := &ServerName{ListLength: binary.BigEndian.Uint16(data[:2])}
+	if len(data) != 2+int(serverName.ListLength) {
+		return nil, fmt.Errorf("ServerName is incomplete")
+	}
+	offset := 2
+	for i := 0; offset < len(data); i++ {
+		if offset+3 > len(data) {
+			return nil, fmt.Errorf("ServerName Payload is invalid")
+		}
+		payload := struct {
+			Type   uint8  `json:"type"`
+			Length uint16 `json:"length"`
+			Name   string `json:"name"`
+		}{}
+		payload.Type, payload.Length = data[offset], binary.BigEndian.Uint16(data[offset:offset+2])
+		offset += 3
+		index := offset + int(payload.Length)
+		if index > len(data) {
+			return nil, fmt.Errorf("ServerName Payload is incomplete")
+		}
+		payload.Name = string(data[offset:index])
+		offset = index
+		serverName.List = append(serverName.List, payload)
+	}
+	return serverName, nil
+}
+
+func (s *ServerName) GetRaw() []byte {
+	listLength := make([]byte, 2)
+	binary.BigEndian.PutUint16(listLength, s.ListLength)
+	serverName := listLength
+	for _, payload := range s.List {
+		serverName = append(serverName, payload.Type)
+		length := make([]byte, 2)
+		binary.BigEndian.PutUint16(length, payload.Length)
+		serverName = append(serverName, length...)
+		serverName = append(serverName, []byte(payload.Name)...)
+	}
+	return serverName
 }

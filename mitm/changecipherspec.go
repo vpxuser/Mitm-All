@@ -10,7 +10,7 @@ func (c *ChangeCipherSpec) GetRaw() []byte {
 
 func ParseChangeCipherSpec(data []byte) (*ChangeCipherSpec, error) {
 	if len(data) != 1 {
-		return nil, fmt.Errorf("Change Cipher Spec is invaild")
+		return nil, fmt.Errorf("ChangeCipherSpec is invaild")
 	}
 	changeCipherSpec := ChangeCipherSpec(data[0])
 	return &changeCipherSpec, nil

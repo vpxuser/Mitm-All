@@ -81,6 +81,8 @@ func ParseHandshake(data []byte, ctx *Context) (*Handshake, error) {
 			return nil, err
 		}
 		handshake.Finished = *finished
+	default:
+		yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Handshake Type : %d", handshake.HandshakeType)))
 	}
 	return handshake, nil
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
@@ -203,6 +202,8 @@ func ParseRecord(data []byte, ctx *Context) (*Record, error) {
 			return nil, err
 		}
 		record.Alert = *alert
+	default:
+		yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Content Type : %v", record.ContentType)))
 	}
 	return record, nil
 }
@@ -219,8 +220,7 @@ func (r *Record) GetDomain() (string, bool) {
 	return "", false
 }
 
-func NewServerHello(c *Record, ctx *Context) (*Record, error) {
-	//serverHello := &ServerHello{Version: c.Handshake.ClientHello.Version}
+func NewServerHello(ctx *Context) (*Record, error) {
 	serverHello := &ServerHello{Version: ctx.Version}
 	binary.BigEndian.PutUint32(serverHello.Random[0:4], uint32(time.Now().Unix()))
 	if _, err := rand.Read(serverHello.Random[4:]); err != nil {
@@ -230,17 +230,6 @@ func NewServerHello(c *Record, ctx *Context) (*Record, error) {
 	serverHello.SessionID = make([]byte, serverHello.SessionIDLength)
 	if _, err := rand.Read(serverHello.SessionID); err != nil {
 		return nil, fmt.Errorf("generate SessionID failed: %v", err)
-	}
-	returnSwitch := true
-	for _, cipherSuite := range c.Handshake.ClientHello.CipherSuites {
-		if cipherSuite == TLS_RSA_WITH_AES_128_CBC_SHA {
-			returnSwitch = false
-			serverHello.CipherSuite = TLS_RSA_WITH_AES_128_CBC_SHA
-			break
-		}
-	}
-	if returnSwitch {
-		return nil, fmt.Errorf("no supported CipherSuites found")
 	}
 	serverHello.CompressionMethod = 0
 	serverHello.ExtensionsLength = 0
@@ -252,14 +241,13 @@ func NewServerHello(c *Record, ctx *Context) (*Record, error) {
 		Payload:       serverHelloRaw,
 	}
 	handshakeRaw := handshake.GetRaw()
-	record := &Record{
+	return &Record{
 		ContentType: ContentTypeHandshake,
 		Version:     ctx.Version,
 		Length:      uint16(len(handshakeRaw)),
 		Handshake:   *handshake,
 		Fragment:    handshakeRaw,
-	}
-	return record, nil
+	}, nil
 }
 
 func NewCertificate(path string, ctx *Context) (*Record, error) {
@@ -286,14 +274,13 @@ func NewCertificate(path string, ctx *Context) (*Record, error) {
 		Payload:       certificateRaw,
 	}
 	handshakeRaw := handshake.GetRaw()
-	record := &Record{
+	return &Record{
 		ContentType: ContentTypeHandshake,
 		Version:     ctx.Version,
 		Length:      uint16(len(handshakeRaw)),
 		Handshake:   *handshake,
 		Fragment:    handshakeRaw,
-	}
-	return record, nil
+	}, nil
 }
 
 func NewServerHelloDone(ctx *Context) *Record {
@@ -318,44 +305,5 @@ func NewChangeCipherSpec() *Record {
 		Version:     VersionTLS102,
 		Length:      1,
 		Fragment:    []byte{0x01},
-	}
-}
-
-func NewFinished(label string, ctx *Context) *Record {
-	clientKeyExchange := ctx.ClientKeyExchange.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
-	yaklog.Debugf("Handshake Messages Length : %d", len(ctx.HandshakeMessages))
-	for i, h := range ctx.HandshakeMessages {
-		yaklog.Debugf("Handshake Messages %d : %v", i, h)
-	}
-	verifyData := PRF(clientKeyExchange.MasterSecret, []byte(label), comm.CombineHash(ctx.HandshakeMessages, sha256.New), 12)
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
-	finished := &Finished{VerifyData: verifyData}
-	handshake := &Handshake{
-		HandshakeType: HandshakeTypeFinished,
-		Length:        uint32(len(verifyData)),
-		Finished:      *finished,
-		Payload:       finished.GetRaw(),
-	}
-	handshakeRaw := handshake.GetRaw()
-	return &Record{
-		ContentType: ContentTypeHandshake,
-		Version:     ctx.Version,
-		Length:      uint16(len(handshakeRaw)),
-		Handshake:   *handshake,
-		Fragment:    handshakeRaw,
-	}
-}
-
-func NewAlert(level, description uint8) *Record {
-	alert := &Alert{
-		Level:       level,
-		Description: description,
-	}
-	return &Record{
-		ContentType: ContentTypeAlert,
-		Version:     VersionTLS102,
-		Length:      2,
-		Alert:       *alert,
-		Fragment:    alert.GetRaw(),
 	}
 }

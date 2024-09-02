@@ -2,6 +2,7 @@ package mitm
 
 import (
 	"bufio"
+	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
@@ -17,66 +18,190 @@ type HandleRecord func(reader *bufio.Reader, conn net.Conn, ctx *Context)
 
 var TLSMITMPipeLine []HandleRecord
 
-func filterRecord(reader *bufio.Reader, contentType uint8, handshakeType uint8, ctx *Context) ([]byte, error) {
-	recordHeader := make([]byte, 5)
-	if _, err := reader.Read(recordHeader); err != nil && err != io.EOF {
+func readUnknownRecord(record []byte, ctx *Context) (*Record, error) {
+	switch ctx.ClientEncrypted {
+	case true:
+		unkonwnRecord, err := ParseBlockRecord(record, ctx)
+		if err != nil {
+			return nil, err
+		}
+		return unkonwnRecord, nil
+	default:
+		unkonwnRecord, err := ParseRecord(record, ctx)
+		if err != nil {
+			return nil, err
+		}
+		return unkonwnRecord, nil
+	}
+}
+
+func filterRecord(reader *bufio.Reader, contentType uint8, handshakeType uint8, ctx *Context) (*Record, error) {
+	header := make([]byte, 5)
+	if _, err := reader.Read(header); err != nil && err != io.EOF {
 		return nil, fmt.Errorf("read TLS Record Header failed : %v", err)
 	}
-	if recordHeader[0] != contentType {
-		return nil, ReadUnkonwnRecord(recordHeader, reader, ctx)
-	}
-	length := binary.BigEndian.Uint16(recordHeader[3:5])
-	recordFragment := make([]byte, length)
-	if _, err := reader.Read(recordFragment); err != nil && err != io.EOF {
+	length := binary.BigEndian.Uint16(header[3:5])
+	fragment := make([]byte, length)
+	if _, err := reader.Read(fragment); err != nil && err != io.EOF {
 		return nil, fmt.Errorf("read TLS Record Fragment failed : %v", err)
 	}
-	record := append(recordHeader, recordFragment...)
-	if recordFragment[0] == handshakeType || handshakeType == 0xff {
-		return record, nil
+	record, err := readUnknownRecord(append(header, fragment...), ctx)
+	if err != nil {
+		return nil, err
+	} else if record.ContentType != contentType {
+		switch record.ContentType {
+		case ContentTypeAlert:
+			alertLevel := comm.SetColor(comm.RED_COLOR_TYPE, AlertLevel[record.Alert.Level])
+			alertDescription := comm.SetColor(comm.RED_COLOR_TYPE, AlertDescription[record.Alert.Description])
+			return nil, fmt.Errorf("[%s] [%s] %s", comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[record.ContentType]), alertLevel, alertDescription)
+		default:
+			return nil, fmt.Errorf("not supported Content Type : [%v] : %d", ContentType[record.ContentType], record.ContentType)
+		}
+	} else if record.ContentType == ContentTypeHandshake && record.Handshake.HandshakeType != handshakeType {
+		return nil, fmt.Errorf("[%s] [%s] Unknown Handshake Type : %d", comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[record.ContentType]), comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[record.Handshake.HandshakeType]), record.Handshake.HandshakeType)
 	}
-	return nil, ReadUnknownHandshake(record, reader, ctx)
+	return record, nil
+}
+
+func SendAlert(level, description uint8, conn net.Conn, ctx *Context) {
+	record := NewAlert(level, description)
+	alert := record.GetRaw()
+	if ctx.ServerEncrypted {
+		var err error
+		alert, err = NewBlockRecord(record, ctx)
+		if err != nil {
+			yaklog.Warnf("%s %s", ctx.Mitm2ClientLog, comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("create Block Alert failed : %v", err)))
+			return
+		}
+	}
+	if _, err := conn.Write(alert); err != nil {
+		yaklog.Warnf("%s %s", ctx.Mitm2ClientLog, comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("write Alert failed : %v", err)))
+		return
+	}
 }
 
 var ReadClientHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) {
-	recordRaw, err := filterRecord(reader, ContentTypeHandshake, HandshakeTypeClientHello, ctx)
+	record, err := filterRecord(reader, ContentTypeHandshake, HandshakeTypeClientHello, ctx)
 	if err != nil {
 		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return
 	}
-	ctx.HandshakeMessages = append(ctx.HandshakeMessages, recordRaw[5:])
-	record, err := ParseRecord(recordRaw, ctx)
-	if err != nil {
-		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
-		return
-	}
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
+	clientHello := record.Handshake.ClientHello
 	ctx.ClientRandom = record.Handshake.ClientHello.Random
-	ctx.CipherSuites = record.Handshake.ClientHello.CipherSuites
-	domain, ok := record.GetDomain()
+	ok := false
+	for _, cipherSuite := range clientHello.CipherSuites {
+		if cipherSuite == ctx.CipherSuite {
+			ok = true
+			break
+		}
+	}
 	if !ok {
-		yaklog.Errorf("%s Domain is empty", ctx.Client2MitmLog)
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, "not support CipherSuites")
 		return
 	}
-	ctx.Domain = domain
+	for _, extension := range clientHello.Extensions {
+		if extension.Type == ExtensionTypeServerName {
+			ctx.Domain = extension.ServerName.List[0].Name
+			break
+		}
+	}
+	if ctx.Domain == "" {
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, "Domain is not exist")
+		return
+	}
 	contentType := comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[record.ContentType])
 	handshakeType := comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[record.Handshake.HandshakeType]))
-	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s , Domain : %s", ctx.Client2MitmLog, contentType, handshakeType, comm.SetColor(comm.YELLOW_BG_COLOR_TYPE, comm.SetColor(comm.RED_COLOR_TYPE, domain)))
+	yaklog.Debugf("%s [%s] [%s] Domain : %s", ctx.Client2MitmLog, contentType, handshakeType, ctx.Domain)
 })
 
-//var WriteServerHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) {
-//	serverHello, err := NewServerHello(clientHello, ctx)
-//	if err != nil {
-//		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
-//		return
-//	}
-//	ctx.ServerHello = *serverHello
-//	serverHelloRaw := serverHello.GetRaw()
-//	ctx.HandshakeMessages = append(ctx.HandshakeMessages, serverHelloRaw[5:])
-//	yaklog.Debugf("%s Content Type : %s , Handshake Type : %s", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[serverHello.ContentType]), comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, HandshakeType[serverHello.Handshake.HandshakeType])))
-//	if _, err = client.Write(serverHelloRaw); err != nil {
-//		yaklog.Errorf("%s write Server Hello failed : %v", ctx.Mitm2ClientLog, err)
-//		return
-//	}
-//})
+var WriteServerHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) {
+	record, err := NewServerHello(ctx)
+	if err != nil {
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
+		return
+	}
+	serverHello := record.GetRaw()
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, serverHello[5:])
+	yaklog.Debugf("%s [%s] [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[record.ContentType]), comm.SetColor(comm.RED_COLOR_TYPE, HandshakeType[record.Handshake.HandshakeType]))
+	if _, err = conn.Write(serverHello); err != nil {
+		yaklog.Errorf("%s write Server Hello failed : %v", ctx.Mitm2ClientLog, err)
+		return
+	}
+})
+
+var WriteCertificate = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) {
+	record, err := NewCertificate(cert.CertificateAndPrivateKeyPath, ctx)
+	if err != nil {
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
+		return
+	}
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
+	yaklog.Debugf("%s [%s] [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[record.ContentType]), comm.SetColor(comm.RED_COLOR_TYPE, HandshakeType[record.Handshake.HandshakeType]))
+	if _, err = conn.Write(record.GetRaw()); err != nil {
+		yaklog.Errorf("%s write Certificate failed : %v", ctx.Mitm2ClientLog, err)
+		return
+	}
+})
+
+var WriteServerHelloDone = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) {
+	record := NewServerHelloDone(ctx)
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
+	yaklog.Debugf("%s [%s] [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[record.ContentType]), comm.SetColor(comm.RED_COLOR_TYPE, HandshakeType[record.Handshake.HandshakeType]))
+	if _, err := conn.Write(record.GetRaw()); err != nil {
+		yaklog.Errorf("%s write Server Hello Done failed : %v", ctx.Mitm2ClientLog, err)
+		return
+	}
+})
+
+var ReadClientKeyExchange = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) {
+	record, err := filterRecord(reader, ContentTypeHandshake, HandshakeTypeClientKeyExchange, ctx)
+	if err != nil {
+		yaklog.Errorf("%s %v", ctx.Mitm2ClientLog, err)
+		return
+	}
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
+	yaklog.Debugf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[record.ContentType]), comm.SetColor(comm.RED_COLOR_TYPE, HandshakeType[record.Handshake.HandshakeType]))
+	clientKeyExchange := record.Handshake.ClientKeyExchange.(*RSAClientKeyExchange)
+	preMasterSecret, err := crypt.DecryptRSAPKCS(ctx.KeyDER, clientKeyExchange.EncrypedPreMasterSecret)
+	if err != nil {
+		yaklog.Errorf("%s RSA Decrypt PreMasterSecret failed : %v", ctx.Mitm2ClientLog, err)
+		return
+	}
+	ctx.PreMasterSecret = preMasterSecret
+	version := binary.BigEndian.Uint16(preMasterSecret[:2])
+	masterSecret := PRF[version](preMasterSecret, []byte(LabelMasterSecret), append(ctx.ClientRandom[:], ctx.ServerRandom[:]...), len(preMasterSecret))
+	ctx.MasterSecret = masterSecret
+	ctx.KeyBlock = PRF[version](masterSecret, []byte(LabelKeyExpansion), append(ctx.ServerRandom[:], ctx.ClientRandom[:]...), 2*(ctx.MACLength+2*ctx.BlockLength))
+	ctx.ClientMACKey, ctx.ServerMACKey = ctx.KeyBlock[:ctx.MACLength], ctx.KeyBlock[ctx.MACLength:2*ctx.MACLength]
+	ctx.ClientKey, ctx.ServerKey = ctx.KeyBlock[2*ctx.MACLength:2*ctx.MACLength+ctx.BlockLength], ctx.KeyBlock[2*ctx.MACLength+ctx.BlockLength:2*(ctx.MACLength+ctx.BlockLength)]
+	ctx.ClientIV, ctx.ServerIV = ctx.KeyBlock[2*(ctx.MACLength+ctx.BlockLength):2*(ctx.MACLength+ctx.BlockLength)+ctx.BlockLength], ctx.KeyBlock[2*(ctx.MACLength+ctx.BlockLength)+ctx.BlockLength:]
+})
+
+var ReadChangeCipherSpec = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) {
+	record, err := filterRecord(reader, ContentTypeChangeCipherSpec, 0xff, ctx)
+	if err != nil {
+		yaklog.Errorf("%s %v", ctx.Mitm2ClientLog, err)
+		return
+	}
+	ctx.ClientEncrypted = true
+	yaklog.Debugf("%s [%s] Raw : %v", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[record.ContentType]), record.Fragment)
+})
+
+var ReadFinished = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) {
+	record, err := filterRecord(reader, ContentTypeHandshake, HandshakeTypeFinished, ctx)
+	if err != nil {
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
+		return
+	}
+	yaklog.Debugf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[record.ContentType]), comm.SetColor(comm.RED_COLOR_TYPE, HandshakeType[record.Handshake.HandshakeType]))
+	verifyData := VerifyPRF(ctx.Version, ctx.MasterSecret, []byte(LabelClientFinished), ctx.HandshakeMessages, 12)
+	if hmac.Equal(verifyData, record.Handshake.Payload) {
+		yaklog.Infof("%s Verify Finished Successfully", ctx.Client2MitmLog)
+	} else {
+		yaklog.Infof("%s Verify Finished Failed", ctx.Client2MitmLog)
+	}
+})
 
 func TLSMITM(reader *bufio.Reader, client net.Conn, ctx *Context) {
 	defer client.Close()

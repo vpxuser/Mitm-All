@@ -21,7 +21,6 @@ type Context struct {
 	Version              uint16
 	ClientRandom         [32]byte
 	ServerRandom         [32]byte
-	CipherSuites         []uint16
 	HandshakeType        uint8 //上下文临时存放的数据
 	Domain               string
 	CipherSuite          uint16
@@ -38,7 +37,9 @@ type Context struct {
 	Finished             Record
 	MACLength            int
 	BlockLength          int
+	PreMasterSecret      []byte
 	MasterSecret         []byte
+	KeyBlock             []byte
 	ClientMACKey         []byte
 	ServerMACKey         []byte
 	ClientKey            []byte
