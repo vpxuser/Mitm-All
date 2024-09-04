@@ -87,33 +87,56 @@ var Version = map[uint16]string{
 }
 
 type Record struct {
-	ContentType      uint8            `json:"contentType"` //1 byte
-	Version          uint16           `json:"version"`     //2 byte
-	Length           uint16           `json:"length"`      //2 byte
-	Fragment         []byte           `json:"fragment,omitempty"`
-	Handshake        Handshake        `json:"handshake,omitempty"`
-	ChangeCipherSpec ChangeCipherSpec `json:"changeCipherSpec,omitempty"`
-	Alert            Alert            `json:"alert,omitempty"`
+	ContentType      uint8     `json:"contentType"` //1 byte
+	Version          uint16    `json:"version"`     //2 byte
+	Length           uint16    `json:"length"`      //2 byte
+	Fragment         []byte    `json:"fragment,omitempty"`
+	Handshake        Handshake `json:"handshake,omitempty"`
+	ChangeCipherSpec byte      `json:"changeCipherSpec,omitempty"`
+	Alert            Alert     `json:"alert,omitempty"`
 }
 
 func NewBlockRecord(record *Record, ctx *Context) ([]byte, error) {
 	seqNum := make([]byte, 8)
 	binary.BigEndian.PutUint64(seqNum, ctx.ServerSeqNum)
-	mac := crypt.HmacHash(ctx.ServerMACKey, append(seqNum, record.GetRaw()...), ctx.HashFunc)
-	plainFragment := append(record.Fragment, mac...)
+
+	// 生成MAC
+	seqFragment := append(seqNum, record.GetRaw()...)
+	yaklog.Debugf("seqFragment Length : %d , seqFragment : %v", len(seqFragment), seqFragment)
+	mac := crypt.HmacHash(ctx.ServerMACKey, seqFragment, ctx.HashFunc)
+	yaklog.Debugf("mac Length : %d , mac : %v", len(mac), mac)
+
 	ctx.ServerSeqNum++
-	paddingLength := ctx.BlockLength - len(plainFragment)%ctx.BlockLength
+
+	// 拼接Fragment和MAC
+	plainFragment := append(record.Fragment, mac...)
+	yaklog.Debugf("plainFragment Length : %d , plainFragment : %v", len(plainFragment), plainFragment)
+
+	// 拼接填充
+	paddingLength := ctx.BlockLength - len(plainFragment)%ctx.BlockLength - 1
+	//yaklog.Debugf("paddingLength : %v", paddingLength)
 	padding := bytes.Repeat([]byte{byte(paddingLength)}, paddingLength)
-	cipherFragment, err := crypt.AESCBCEncrypt(append(plainFragment, append(mac, append(padding, byte(paddingLength))...)...), ctx.ServerKey, ctx.ServerIV)
+	yaklog.Debugf("padding Length : %d , padding : %v", len(padding), padding)
+	paddingFragment := append(plainFragment, append(padding, byte(paddingLength))...)
+	yaklog.Debugf("paddingFragment Length : %d , paddingFragment : %v", len(paddingFragment), paddingFragment)
+
+	yaklog.Debugf("ClientIV length : %d , ClientIV : %v", len(ctx.ClientIV), ctx.ClientIV)
+	cipherFragment, err := crypt.AESCBCEncrypt(paddingFragment, ctx.ClientKey, ctx.ClientIV)
 	if err != nil {
 		return nil, err
 	}
-	finalFragment := append(ctx.ServerIV, cipherFragment...)
+	yaklog.Debugf("ClientIV length : %d , ClientIV : %v", len(ctx.ClientIV), ctx.ClientIV)
+	yaklog.Debugf("cipherFragment Length : %d , cipherFragment : %v", len(cipherFragment), cipherFragment)
+
+	// 拼接IV
+	fragment := append(ctx.ClientIV, cipherFragment...)
+	yaklog.Debugf("fragment Length : %d , fragment : %v", len(fragment), fragment)
+
 	blockRecord := &Record{
 		ContentType: record.ContentType,
 		Version:     record.Version,
-		Length:      uint16(len(finalFragment)),
-		Fragment:    finalFragment,
+		Length:      uint16(len(fragment)),
+		Fragment:    fragment,
 	}
 	return blockRecord.GetRaw(), nil
 }
@@ -130,7 +153,7 @@ func (r *Record) GetRaw() []byte {
 		case ContentTypeHandshake:
 			return append(record, r.Handshake.GetRaw()...)
 		case ContentTypeChangeCipherSpec:
-			return append(record, r.ChangeCipherSpec.GetRaw()...)
+			return append(record, r.ChangeCipherSpec)
 		case ContentTypeAlert:
 			return append(record, r.Alert.GetRaw()...)
 		default:
@@ -141,28 +164,57 @@ func (r *Record) GetRaw() []byte {
 }
 
 func ParseBlockRecord(blockRecord []byte, ctx *Context) (*Record, error) {
-	plainRecord := blockRecord[:3]
-	iv := blockRecord[5 : 5+ctx.BlockLength]
-	paddingFragment, err := crypt.AESCBCDecrypt(blockRecord[5+ctx.BlockLength:], ctx.ClientKey, iv)
+	//yaklog.Debugf("blockRecord Length : %d , blockRecord : %v", len(blockRecord), blockRecord)
+
+	// 获取对称解密的IV，获取需要解密的密文
+	iv, cipherFragment := blockRecord[5:5+ctx.BlockLength], blockRecord[5+ctx.BlockLength:]
+	//yaklog.Debugf("iv Length : %d , iv : %v", len(iv), iv)
+	//yaklog.Debugf("cipherRecord Length : %d , cipherRecord : %v", len(cipherRecord), cipherRecord)
+
+	// 解密密文
+	paddingFragment, err := crypt.AESCBCDecrypt(cipherFragment, ctx.ClientKey, iv)
 	if err != nil {
 		return nil, err
 	}
-	paddingLength := paddingFragment[len(paddingFragment)-1]
-	plainFragment := paddingFragment[:len(paddingFragment)-int(paddingLength)-1]
+	//yaklog.Debugf("paddingFragment Length : %d , paddingFragment : %v", len(paddingFragment), paddingFragment)
+
+	// 去除填充长度和填充数据
+	plainFragment := paddingFragment[:len(paddingFragment)-int(paddingFragment[len(paddingFragment)-1])-1]
+	//yaklog.Debugf("plainFragment Length : %d , plainFragment : %v", len(plainFragment), plainFragment)
+
+	// 分离Fragment和MAC数据
 	fragment, mac := plainFragment[:len(plainFragment)-ctx.MACLength], plainFragment[len(plainFragment)-ctx.MACLength:]
-	fragmentLength := make([]byte, 2)
-	binary.BigEndian.PutUint16(fragmentLength, uint16(len(fragment)))
-	plainRecord = append(plainRecord, append(fragmentLength, fragment...)...)
-	seqNum := make([]byte, 8)
-	binary.BigEndian.PutUint64(seqNum, ctx.ClientSeqNum)
-	verifyMAC := crypt.HmacHash(ctx.ClientMACKey, append(seqNum, plainRecord...), ctx.HashFunc)
-	ctx.ClientSeqNum++
-	//todo
-	if !hmac.Equal(mac, verifyMAC) {
-		yaklog.Debugf("Verify MAC Successful")
-	} else {
-		yaklog.Debugf("Verify MAC Failed")
+	//yaklog.Debugf("fragment Length : %d , fragment : %v", len(fragment), fragment)
+	//yaklog.Debugf("mac Length : %d , mac : %v", len(mac), mac)
+
+	// 生成明文Record
+	length := make([]byte, 2)
+	binary.BigEndian.PutUint16(length, uint16(len(fragment)))
+	plainRecord := append(blockRecord[:3], append(length, fragment...)...)
+	//yaklog.Debugf("plainRecord Length : %d , plainRecord : %v", len(plainRecord), plainRecord)
+
+	// 校验MAC防篡改
+	if ctx.VerifyMAC {
+		seqNum := make([]byte, 8)
+		binary.BigEndian.PutUint64(seqNum, ctx.ClientSeqNum)
+		tamplate := fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[plainRecord[0]]))
+		if plainRecord[0] == ContentTypeHandshake {
+			tamplate = fmt.Sprintf("%s [%s]", tamplate, comm.SetColor(comm.RED_COLOR_TYPE, HandshakeType[plainRecord[5]]))
+		}
+
+		// 服务端生成MAC
+		verifyMAC := crypt.HmacHash(ctx.ClientMACKey, append(seqNum, plainRecord...), ctx.HashFunc)
+		//yaklog.Debugf("verifyMAC Length : %d , verifyMAC : %v", len(verifyMAC), verifyMAC)
+
+		// 校验MAC
+		if hmac.Equal(mac, verifyMAC) {
+			yaklog.Debugf("%s Verify MAC Successfully", tamplate)
+		} else {
+			return nil, fmt.Errorf("%s Verify MAC Failed", tamplate)
+		}
 	}
+
+	ctx.ClientSeqNum++
 	record, err := ParseRecord(plainRecord, ctx)
 	if err != nil {
 		return nil, err
@@ -191,11 +243,10 @@ func ParseRecord(data []byte, ctx *Context) (*Record, error) {
 		}
 		record.Handshake = *handshake
 	case ContentTypeChangeCipherSpec:
-		changeCipherSpec, err := ParseChangeCipherSpec(data[5+record.Length:])
-		if err != nil {
-			return nil, err
+		if len(record.Fragment) != 1 {
+			return nil, fmt.Errorf("Change Cipher Spec is invaild")
 		}
-		record.ChangeCipherSpec = *changeCipherSpec
+		record.ChangeCipherSpec = data[5]
 	case ContentTypeAlert:
 		alert, err := ParseAlert(record.Fragment, ctx)
 		if err != nil {
@@ -224,13 +275,14 @@ func NewServerHello(ctx *Context) (*Record, error) {
 	serverHello := &ServerHello{Version: ctx.Version}
 	binary.BigEndian.PutUint32(serverHello.Random[0:4], uint32(time.Now().Unix()))
 	if _, err := rand.Read(serverHello.Random[4:]); err != nil {
-		return nil, fmt.Errorf("generate Random field failed: %v", err)
+		return nil, fmt.Errorf("create Random failed : %v", err)
 	}
 	serverHello.SessionIDLength = 32
 	serverHello.SessionID = make([]byte, serverHello.SessionIDLength)
 	if _, err := rand.Read(serverHello.SessionID); err != nil {
-		return nil, fmt.Errorf("generate SessionID failed: %v", err)
+		return nil, fmt.Errorf("create SessionID failed : %v", err)
 	}
+	serverHello.CipherSuite = ctx.CipherSuite
 	serverHello.CompressionMethod = 0
 	serverHello.ExtensionsLength = 0
 	serverHelloRaw := serverHello.GetRaw()

@@ -5,15 +5,15 @@ import (
 )
 
 type ClientHello struct {
-	Version                  uint16      `json:"clientHelloTLSVersion"`
-	Random                   [32]byte    `json:"random"`
-	SessionIDLength          uint8       `json:"sessionIDLength"`
-	SessionID                []byte      `json:"sessionID"`
-	CipherSuitesLength       uint16      `json:"cipherSuitesLength"`
-	CipherSuites             []uint16    `json:"cipherSuites"`
-	CompressionMethodsLength uint8       `json:"compressionMethodsLength"`
-	CompressionMethods       []uint8     `json:"compressionMethods"`
-	ExtensionsLength         uint16      `json:"extensionsLength"`
+	Version                  uint16      `json:"version,omitempty"`
+	Random                   [32]byte    `json:"random,omitempty"`
+	SessionIDLength          uint8       `json:"sessionIDLength,omitempty"`
+	SessionID                []byte      `json:"sessionID,omitempty"`
+	CipherSuitesLength       uint16      `json:"cipherSuitesLength,omitempty"`
+	CipherSuites             []uint16    `json:"cipherSuites,omitempty"`
+	CompressionMethodsLength uint8       `json:"compressionMethodsLength,omitempty"`
+	CompressionMethods       []uint8     `json:"compressionMethods,omitempty"`
+	ExtensionsLength         uint16      `json:"extensionsLength,omitempty"`
 	Extensions               []Extension `json:"extensions,omitempty"`
 }
 

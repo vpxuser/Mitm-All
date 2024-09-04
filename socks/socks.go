@@ -35,7 +35,7 @@ func Run() {
 	yaklog.Infof("start SOCKS server on [%s]", setting.Host)
 	yaklog.Infof("connect to HTTP proxy [%s]", setting.Proxy)
 	for {
-		ctx := mitm.NewContext()
+		ctx := mitm.NewContext(mitm.TLS_RSA_WITH_AES_128_CBC_SHA)
 		ctx.LogTamplate = fmt.Sprintf("[%s]", ctx.ContextId)
 		client, err := server.Accept()
 		if err != nil {

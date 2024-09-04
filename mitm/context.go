@@ -21,7 +21,6 @@ type Context struct {
 	Version              uint16
 	ClientRandom         [32]byte
 	ServerRandom         [32]byte
-	HandshakeType        uint8 //上下文临时存放的数据
 	Domain               string
 	CipherSuite          uint16
 	HashFunc             func() hash.Hash
@@ -29,12 +28,6 @@ type Context struct {
 	KeyDER               *rsa.PrivateKey
 	CertDER              *x509.Certificate
 	HandshakeMessages    [][]byte
-	ClientHello          Record
-	ServerHello          Record
-	Certificate          Record
-	ServerHelloDone      Record
-	ClientKeyExchange    Record
-	Finished             Record
 	MACLength            int
 	BlockLength          int
 	PreMasterSecret      []byte
@@ -50,16 +43,23 @@ type Context struct {
 	ServerEncrypted      bool
 	ClientSeqNum         uint64
 	ServerSeqNum         uint64
+	VerifyFinished       bool
+	VerifyMAC            bool
 }
 
-func NewContext() *Context {
-	return &Context{
-		ContextId:     uuid.New().String(),
-		Version:       VersionTLS102,
-		HandshakeType: 0xFF,
-		CipherSuite:   TLS_RSA_WITH_AES_128_CBC_SHA,
-		HashFunc:      sha1.New,
-		ClientSeqNum:  0,
-		ServerSeqNum:  0,
+func NewContext(cipherSuite uint16) *Context {
+	ctx := &Context{
+		ContextId:      uuid.New().String(),
+		Version:        VersionTLS102,
+		CipherSuite:    cipherSuite,
+		VerifyMAC:      true,
+		VerifyFinished: true,
 	}
+	switch cipherSuite {
+	case TLS_RSA_WITH_AES_128_CBC_SHA:
+		ctx.MACLength = 20
+		ctx.BlockLength = 16
+		ctx.HashFunc = sha1.New
+	}
+	return ctx
 }

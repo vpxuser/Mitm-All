@@ -5,13 +5,13 @@ import (
 )
 
 type ServerHello struct {
-	Version           uint16      `json:"version"`
-	Random            [32]byte    `json:"random"`
-	SessionIDLength   uint8       `json:"sessionIDLength"`
-	SessionID         []byte      `json:"sessionID"`
-	CipherSuite       uint16      `json:"cipherSuite"`
-	CompressionMethod uint8       `json:"compressionMethod"`
-	ExtensionsLength  uint16      `json:"extensionsLength"`
+	Version           uint16      `json:"version,omitempty"`
+	Random            [32]byte    `json:"random,omitempty"`
+	SessionIDLength   uint8       `json:"sessionIDLength,omitempty"`
+	SessionID         []byte      `json:"sessionID,omitempty"`
+	CipherSuite       uint16      `json:"cipherSuite,omitempty"`
+	CompressionMethod uint8       `json:"compressionMethod,omitempty"`
+	ExtensionsLength  uint16      `json:"extensionsLength,omitempty"`
 	Extensions        []Extension `json:"extensions,omitempty"`
 }
 

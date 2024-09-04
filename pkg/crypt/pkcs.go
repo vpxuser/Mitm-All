@@ -6,10 +6,10 @@ import (
 	yaklog "github.com/yaklang/yaklang/common/log"
 )
 
-func Pad(cipherText []byte, blockSize int) []byte {
-	paddingLen := blockSize - len(cipherText)%blockSize
+func Pad(plainText []byte, blockSize int) []byte {
+	paddingLen := blockSize - len(plainText)%blockSize
 	paddingText := bytes.Repeat([]byte{byte(paddingLen - 1)}, paddingLen)
-	return append(cipherText, paddingText...)
+	return append(plainText, paddingText...)
 }
 
 func PKCSPad(cipherText []byte, blockSize int) []byte {

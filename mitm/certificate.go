@@ -5,11 +5,11 @@ import (
 )
 
 type Certificate struct {
-	CertificatesLength uint32 // 3个字节
+	CertificatesLength uint32 `json:"certificatesLength,omitempty"` // 3个字节
 	Certificates       []struct {
 		CertificateLength uint32 // 3个字节
 		Certificate       []byte
-	}
+	} `json:"certificates,omitempty"`
 }
 
 // ParseCertificate 从 []byte 数据解析出 Certificate 结构体

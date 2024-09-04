@@ -40,14 +40,14 @@ var HandshakeType = map[byte]string{
 }
 
 type Handshake struct {
-	HandshakeType     uint8             `json:"handshakeType"`     // 握手消息类型
-	Length            uint32            `json:"length"`            // 有效载荷长度（3 字节）
-	Payload           []byte            `json:"payload,omitempty"` // 有效载荷数据
+	HandshakeType     uint8             `json:"handshakeType,omitempty"` // 握手消息类型
+	Length            uint32            `json:"length,omitempty"`        // 有效载荷长度（3 字节）
+	Payload           []byte            `json:"payload,omitempty"`       // 有效载荷数据
 	ClientHello       ClientHello       `json:"clientHello,omitempty"`
 	ServerHello       ServerHello       `json:"serverHello,omitempty"`
 	Certificate       Certificate       `json:"certificate,omitempty"`
 	ClientKeyExchange ClientKeyExchange `json:"clientKeyExchange,omitempty"`
-	Finished          Finished          `json:"finished,omitempty"`
+	Finished          []byte            `json:"finished,omitempty"`
 }
 
 func ParseHandshake(data []byte, ctx *Context) (*Handshake, error) {
@@ -76,11 +76,7 @@ func ParseHandshake(data []byte, ctx *Context) (*Handshake, error) {
 		}
 		handshake.ClientKeyExchange = clientKeyExchange
 	case HandshakeTypeFinished:
-		finished, err := ParseFinished(handshake.Payload, ctx)
-		if err != nil {
-			return nil, err
-		}
-		handshake.Finished = *finished
+		handshake.Finished = data[4 : 4+handshake.Length]
 	default:
 		yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Handshake Type : %d", handshake.HandshakeType)))
 	}
@@ -96,8 +92,10 @@ func (h *Handshake) GetRaw() []byte {
 			return append(handshake, h.ServerHello.GetRaw()...)
 		case HandshakeTypeCertificate:
 			return append(handshake, h.Certificate.GetRaw()...)
+		case HandshakeTypeServerHelloDone:
+			return handshake
 		case HandshakeTypeFinished:
-			return append(handshake, h.Finished.GetRaw()...)
+			return append(handshake, h.Payload...)
 		default:
 			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Handshake Type : %d", h.HandshakeType)))
 		}

@@ -106,7 +106,7 @@ func ParseServerName(data []byte) (*ServerName, error) {
 			Length uint16 `json:"length"`
 			Name   string `json:"name"`
 		}{}
-		payload.Type, payload.Length = data[offset], binary.BigEndian.Uint16(data[offset:offset+2])
+		payload.Type, payload.Length = data[offset], binary.BigEndian.Uint16(data[offset+1:offset+3])
 		offset += 3
 		index := offset + int(payload.Length)
 		if index > len(data) {

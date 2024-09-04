@@ -79,8 +79,8 @@ var AlertDescription = map[uint8]string{
 }
 
 type Alert struct {
-	Level       uint8 // 告警级别
-	Description uint8 // 告警描述
+	Level       uint8 `json:"level,omitempty"`       // 告警级别
+	Description uint8 `json:"description,omitempty"` // 告警描述
 }
 
 func ParseAlert(data []byte, ctx *Context) (*Alert, error) {
