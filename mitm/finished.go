@@ -2,7 +2,6 @@ package mitm
 
 import (
 	"crypto/sha256"
-	yaklog "github.com/yaklang/yaklang/common/log"
 	"hash"
 )
 
@@ -48,13 +47,13 @@ func VerifyPRF(version uint16, secret, label []byte, handshakeMessages [][]byte,
 }
 
 func NewFinished(ctx *Context) *Record {
-	yaklog.Debugf("Handshake Messages Length : %d", len(ctx.HandshakeMessages))
-	for i, h := range ctx.HandshakeMessages {
-		yaklog.Debugf("Handshake Messages %d : %v", i, h)
-	}
+	//yaklog.Debugf("Handshake Messages Length : %d", len(ctx.HandshakeMessages))
+	//for i, h := range ctx.HandshakeMessages {
+	//	yaklog.Debugf("Handshake Messages %d : %v", i, h)
+	//}
 	verifyData := VerifyPRF(ctx.Version, ctx.MasterSecret, []byte(LabelServerFinished), ctx.HandshakeMessages, 12)
 	//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
-	yaklog.Debugf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)
+	//yaklog.Debugf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)
 	handshake := &Handshake{
 		HandshakeType: HandshakeTypeFinished,
 		Length:        uint32(len(verifyData)),

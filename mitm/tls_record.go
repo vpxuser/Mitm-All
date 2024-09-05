@@ -7,6 +7,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
+	"net/http"
+	"net/http/httputil"
 	"socks2https/pkg/cert"
 	"socks2https/pkg/comm"
 	"socks2https/pkg/crypt"
@@ -94,6 +96,7 @@ type Record struct {
 	Handshake        Handshake `json:"handshake,omitempty"`
 	ChangeCipherSpec byte      `json:"changeCipherSpec,omitempty"`
 	Alert            Alert     `json:"alert,omitempty"`
+	ApplicationData  []byte
 }
 
 func NewBlockRecord(record *Record, ctx *Context) ([]byte, error) {
@@ -102,35 +105,40 @@ func NewBlockRecord(record *Record, ctx *Context) ([]byte, error) {
 
 	// 生成MAC
 	seqFragment := append(seqNum, record.GetRaw()...)
-	yaklog.Debugf("seqFragment Length : %d , seqFragment : %v", len(seqFragment), seqFragment)
+	//yaklog.Debugf("seqFragment Length : %d , seqFragment : %v", len(seqFragment), seqFragment)
+	//todo
 	mac := crypt.HmacHash(ctx.ServerMACKey, seqFragment, ctx.HashFunc)
-	yaklog.Debugf("mac Length : %d , mac : %v", len(mac), mac)
+	//yaklog.Debugf("mac Length : %d , mac : %v", len(mac), mac)
 
 	ctx.ServerSeqNum++
 
 	// 拼接Fragment和MAC
 	plainFragment := append(record.Fragment, mac...)
-	yaklog.Debugf("plainFragment Length : %d , plainFragment : %v", len(plainFragment), plainFragment)
+	//yaklog.Debugf("plainFragment Length : %d , plainFragment : %v", len(plainFragment), plainFragment)
 
 	// 拼接填充
 	paddingLength := ctx.BlockLength - len(plainFragment)%ctx.BlockLength - 1
 	//yaklog.Debugf("paddingLength : %v", paddingLength)
 	padding := bytes.Repeat([]byte{byte(paddingLength)}, paddingLength)
-	yaklog.Debugf("padding Length : %d , padding : %v", len(padding), padding)
+	//yaklog.Debugf("padding Length : %d , padding : %v", len(padding), padding)
 	paddingFragment := append(plainFragment, append(padding, byte(paddingLength))...)
-	yaklog.Debugf("paddingFragment Length : %d , paddingFragment : %v", len(paddingFragment), paddingFragment)
+	//yaklog.Debugf("paddingFragment Length : %d , paddingFragment : %v", len(paddingFragment), paddingFragment)
 
-	yaklog.Debugf("ClientIV length : %d , ClientIV : %v", len(ctx.ClientIV), ctx.ClientIV)
-	cipherFragment, err := crypt.AESCBCEncrypt(paddingFragment, ctx.ClientKey, ctx.ClientIV)
+	//todo
+	//yaklog.Debugf("ServerIV length : %d , ServerIV : %v", len(ctx.ServerIV), ctx.ServerIV)
+	//todo
+	cipherFragment, err := crypt.AESCBCEncrypt(paddingFragment, ctx.ServerKey, ctx.ServerIV)
 	if err != nil {
 		return nil, err
 	}
-	yaklog.Debugf("ClientIV length : %d , ClientIV : %v", len(ctx.ClientIV), ctx.ClientIV)
-	yaklog.Debugf("cipherFragment Length : %d , cipherFragment : %v", len(cipherFragment), cipherFragment)
+	//todo
+	//yaklog.Debugf("ServerIV length : %d , ServerIV : %v", len(ctx.ServerIV), ctx.ServerIV)
+	//yaklog.Debugf("cipherFragment Length : %d , cipherFragment : %v", len(cipherFragment), cipherFragment)
 
 	// 拼接IV
-	fragment := append(ctx.ClientIV, cipherFragment...)
-	yaklog.Debugf("fragment Length : %d , fragment : %v", len(fragment), fragment)
+	//todo
+	fragment := append(ctx.ServerIV, cipherFragment...)
+	//yaklog.Debugf("fragment Length : %d , fragment : %v", len(fragment), fragment)
 
 	blockRecord := &Record{
 		ContentType: record.ContentType,
@@ -156,6 +164,8 @@ func (r *Record) GetRaw() []byte {
 			return append(record, r.ChangeCipherSpec)
 		case ContentTypeAlert:
 			return append(record, r.Alert.GetRaw()...)
+		case ContentTypeApplicationData:
+			return append(record, r.ApplicationData...)
 		default:
 			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Content Type : %v", r.ContentType)))
 		}
@@ -219,6 +229,11 @@ func ParseBlockRecord(blockRecord []byte, ctx *Context) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	//if record.Handshake.HandshakeType == HandshakeTypeFinished {
+	//	ctx.Cache = cipherFragment
+	//}
+
 	return record, nil
 }
 
@@ -246,13 +261,15 @@ func ParseRecord(data []byte, ctx *Context) (*Record, error) {
 		if len(record.Fragment) != 1 {
 			return nil, fmt.Errorf("Change Cipher Spec is invaild")
 		}
-		record.ChangeCipherSpec = data[5]
+		record.ChangeCipherSpec = record.Fragment[0]
 	case ContentTypeAlert:
 		alert, err := ParseAlert(record.Fragment, ctx)
 		if err != nil {
 			return nil, err
 		}
 		record.Alert = *alert
+	case ContentTypeApplicationData:
+		record.ApplicationData = record.Fragment
 	default:
 		yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Content Type : %v", record.ContentType)))
 	}
@@ -358,4 +375,18 @@ func NewChangeCipherSpec() *Record {
 		Length:      1,
 		Fragment:    []byte{0x01},
 	}
+}
+
+func NewApplicationData(resp *http.Response, ctx *Context) (*Record, error) {
+	fragment, err := httputil.DumpResponse(resp, true)
+	if err != nil {
+		return nil, fmt.Errorf("dump Response failed : %v", err)
+	}
+	return &Record{
+		ContentType:     ContentTypeApplicationData,
+		Version:         ctx.Version,
+		Length:          uint16(len(fragment)),
+		Fragment:        fragment,
+		ApplicationData: fragment,
+	}, nil
 }

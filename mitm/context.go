@@ -5,7 +5,10 @@ import (
 	"crypto/sha1"
 	"crypto/x509"
 	"github.com/google/uuid"
+	yaklog "github.com/yaklang/yaklang/common/log"
 	"hash"
+	"net/http"
+	"net/url"
 )
 
 type Context struct {
@@ -27,6 +30,7 @@ type Context struct {
 	KeyExchangeAlgorithm uint8
 	KeyDER               *rsa.PrivateKey
 	CertDER              *x509.Certificate
+	Cache                []byte
 	HandshakeMessages    [][]byte
 	MACLength            int
 	BlockLength          int
@@ -45,6 +49,13 @@ type Context struct {
 	ServerSeqNum         uint64
 	VerifyFinished       bool
 	VerifyMAC            bool
+	Proxy                string
+	HttpClient           *http.Client
+	Request              *http.Request
+	Response             *http.Response
+	DNSServer            string
+	RequestMITMPiPeLine  []ModifyRequest
+	ResponseMITMPiPeLine []ModifyResponse
 }
 
 func NewContext(cipherSuite uint16) *Context {
@@ -54,6 +65,17 @@ func NewContext(cipherSuite uint16) *Context {
 		CipherSuite:    cipherSuite,
 		VerifyMAC:      true,
 		VerifyFinished: true,
+		Proxy:          "http://127.0.0.1:8081",
+		DNSServer:      "8.8.8.8",
+	}
+	proxyURL, err := url.Parse(ctx.Proxy)
+	if err != nil {
+		yaklog.Fatalf("Proxy URL is invalid : %v", err)
+	}
+	ctx.HttpClient = &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		},
 	}
 	switch cipherSuite {
 	case TLS_RSA_WITH_AES_128_CBC_SHA:

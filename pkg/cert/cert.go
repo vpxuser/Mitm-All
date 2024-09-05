@@ -21,6 +21,7 @@ const CertificateAndPrivateKeyPath = "config"
 var (
 	CertificateDB = make(map[string]*x509.Certificate)
 	PrivateKeyDB  = make(map[string]*rsa.PrivateKey)
+	IPtoDomain    = make(map[string][]string)
 )
 
 func init() {
