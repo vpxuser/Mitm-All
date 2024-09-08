@@ -6,10 +6,34 @@ import (
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"io"
 	"net/http"
-	"socks2https/pkg/cert"
+	"socks2https/pkg/comm"
+	"socks2https/pkg/dnstools"
 )
 
-type BaiduHttpDNS struct {
+var (
+	Domain2IP = make(map[string]map[string]struct{})
+	IP2Domain = make(map[string][]string)
+)
+
+var DNSRequest = ModifyRequest(func(req *http.Request, ctx *Context) (*http.Request, *http.Response) {
+	if _, ok := Domain2IP[req.Host]; !ok {
+		ipv4s, err := dnstools.DNS2IPv4(req.Host, ctx.DNSServer)
+		if err != nil {
+			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, err))
+			return req, nil
+		}
+		for _, ipv4 := range ipv4s {
+			if _, ok = Domain2IP[req.Host][ipv4]; !ok {
+				Domain2IP[req.Host] = make(map[string]struct{})
+				Domain2IP[req.Host][ipv4] = struct{}{}
+				IP2Domain[ipv4] = append(IP2Domain[ipv4], req.Host)
+			}
+		}
+	}
+	return req, nil
+})
+
+type BaiduHTTPDNS struct {
 	Clientip string `json:"clientip"`
 	Data     map[string]struct {
 		IPv4 struct {
@@ -30,10 +54,10 @@ type BaiduHttpDNS struct {
 	Timestamp int `json:"timestamp"`
 }
 
-var HttpDNSResponse = ModifyResponse(func(resp *http.Response, ctx *Context) *http.Response {
+var HTTPDNSResponse = ModifyResponse(func(resp *http.Response, ctx *Context) *http.Response {
 	switch ctx.Request.Host {
 	case "httpdns.baidubce.com":
-		baiduDNS := &BaiduHttpDNS{}
+		baiduDNS := &BaiduHTTPDNS{}
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			yaklog.Warnf("read Response Body failed : %v", err)
@@ -43,12 +67,12 @@ var HttpDNSResponse = ModifyResponse(func(resp *http.Response, ctx *Context) *ht
 			yaklog.Warnf("parse Response Body failed : %v", err)
 		}
 		for domain, ip := range baiduDNS.Data {
-			_, _, err := cert.GetCertificateAndKey(cert.CertificateAndPrivateKeyPath, domain)
-			if err != nil {
-				yaklog.Warnf("%v", err)
-			}
 			for _, ipv4 := range ip.IPv4.Ip {
-				cert.IPtoDomain[ipv4] = append(cert.IPtoDomain[ipv4], domain)
+				if _, ok := Domain2IP[domain][ipv4]; !ok {
+					Domain2IP[domain] = make(map[string]struct{})
+					Domain2IP[domain][ipv4] = struct{}{}
+					IP2Domain[ipv4] = append(IP2Domain[ipv4], domain)
+				}
 			}
 		}
 	}

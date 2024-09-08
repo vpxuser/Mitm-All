@@ -1,7 +1,12 @@
 package mitm
 
 import (
+	"bufio"
 	"encoding/binary"
+	"fmt"
+	yaklog "github.com/yaklang/yaklang/common/log"
+	"net"
+	"socks2https/pkg/comm"
 )
 
 type ClientHello struct {
@@ -52,3 +57,38 @@ func ParseClientHello(data []byte) (*ClientHello, error) {
 	}
 	return clientHello, nil
 }
+
+var ReadClientHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Handshake"), comm.SetColor(comm.RED_COLOR_TYPE, "Client Hello"))
+	record, err := FilterRecord(reader, ContentTypeHandshake, HandshakeTypeClientHello, ctx)
+	if err != nil {
+		return err
+	}
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
+	clientHello := record.Handshake.ClientHello
+	ctx.ClientRandom = record.Handshake.ClientHello.Random
+	for _, cipherSuite := range clientHello.CipherSuites {
+		if cipherSuite != ctx.CipherSuite {
+			continue
+		}
+		for _, extension := range clientHello.Extensions {
+			if extension.Type != ExtensionTypeServerName {
+				continue
+			}
+			ctx.Domain = extension.ServerName.List[0].Name
+			yaklog.Infof("%s Domain : %s", tamplate, ctx.Domain)
+			return nil
+		}
+		if domains, ok := IP2Domain[ctx.Host]; ok {
+			ctx.Domain = domains[0]
+			yaklog.Infof("%s Parse CDN IP %s to Domain %s", tamplate, ctx.Host, ctx.Domain)
+			return nil
+		}
+		// todo defalut Certificate
+		ctx.Domain = ctx.DefaultDomain
+		yaklog.Infof("%s use Default Domain : %s", tamplate, ctx.Domain)
+		return nil
+		//return fmt.Errorf("%s query DNS Record failed", tamplate)
+	}
+	return fmt.Errorf("%s not support Cipher Suites", tamplate)
+})

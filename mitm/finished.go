@@ -1,8 +1,14 @@
 package mitm
 
 import (
+	"bufio"
+	"crypto/hmac"
 	"crypto/sha256"
+	"fmt"
+	yaklog "github.com/yaklang/yaklang/common/log"
 	"hash"
+	"net"
+	"socks2https/pkg/comm"
 )
 
 const (
@@ -69,3 +75,40 @@ func NewFinished(ctx *Context) *Record {
 		Handshake:   *handshake,
 	}
 }
+
+var ReadFinished = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Handshake"), comm.SetColor(comm.RED_COLOR_TYPE, "Finished"))
+
+	record, err := FilterRecord(reader, ContentTypeHandshake, HandshakeTypeFinished, ctx)
+	if err != nil {
+		return fmt.Errorf("%s %v", tamplate, err)
+	}
+
+	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
+
+	if ctx.VerifyFinished {
+		verifyData := VerifyPRF(ctx.Version, ctx.MasterSecret, []byte(LabelClientFinished), ctx.HandshakeMessages, 12)
+		if hmac.Equal(verifyData, record.Handshake.Payload) {
+			return fmt.Errorf("%s verify Finished failed", tamplate)
+		}
+		yaklog.Infof("%s verify Finished successfully", tamplate)
+	} else {
+		yaklog.Infof("%s not need to verify Finished", tamplate)
+	}
+	return nil
+})
+
+var WriteFinished = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Handshake"), comm.SetColor(comm.RED_COLOR_TYPE, "Finished"))
+	blockRecord, err := NewBlockRecord(NewFinished(ctx), ctx)
+	if err != nil {
+		return fmt.Errorf("%s %v", tamplate, err)
+	}
+
+	if _, err := conn.Write(blockRecord); err != nil {
+		return fmt.Errorf("%s write TLS Record failed : %v", tamplate, err)
+	}
+
+	yaklog.Infof("%s write TLS Record successfully", tamplate)
+	return nil
+})
