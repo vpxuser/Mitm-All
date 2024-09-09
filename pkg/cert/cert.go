@@ -38,6 +38,7 @@ func init() {
 			yaklog.Fatalf("save CA Certificate failed : %v", err)
 		}
 	} else {
+		SubDomainDB["ca"] = "ca"
 		CertificateDB["ca"] = caCertDER
 		PrivateKeyDB["ca"] = caKeyDER
 	}
@@ -198,42 +199,28 @@ func IsWildcardCertificate(cert *x509.Certificate) bool {
 	return false
 }
 
+// todo
 func GetKey(path, domain string) (*rsa.PrivateKey, error) {
-	parentDomain := GetParentDomain(domain)
-	keyDER, ok := PrivateKeyDB[domain]
+	parentDomain := SubDomainDB[domain]
+	keyDER, ok := PrivateKeyDB[parentDomain]
 	if ok {
 		return keyDER, nil
 	}
-	keyDER, ok = PrivateKeyDB[parentDomain]
-	if ok {
-		return keyDER, nil
-	}
-	keyDER, err := LoadKey(fmt.Sprintf("%s/%s.key", path, domain))
-	if err == nil {
-		return keyDER, nil
-	}
-	keyDER, err = LoadKey(fmt.Sprintf("%s/%s.key", path, parentDomain))
+	keyDER, err := LoadKey(fmt.Sprintf("%s/%s.key", path, parentDomain))
 	if err == nil {
 		return keyDER, nil
 	}
 	return nil, fmt.Errorf("%s Fake Private Key not exist", domain)
 }
 
+// todo
 func GetCertificate(path, domain string) (*x509.Certificate, error) {
-	parentDomain := GetParentDomain(domain)
-	certDER, ok := CertificateDB[domain]
+	parentDomain := SubDomainDB[domain]
+	certDER, ok := CertificateDB[parentDomain]
 	if ok {
 		return certDER, nil
 	}
-	certDER, ok = CertificateDB[parentDomain]
-	if ok {
-		return certDER, nil
-	}
-	certDER, err := LoadCert(fmt.Sprintf("%s/%s.crt", path, domain))
-	if err == nil {
-		return certDER, nil
-	}
-	certDER, err = LoadCert(fmt.Sprintf("%s/%s.crt", path, parentDomain))
+	certDER, err := LoadCert(fmt.Sprintf("%s/%s.crt", path, parentDomain))
 	if err == nil {
 		return certDER, nil
 	}
@@ -302,8 +289,9 @@ func GetCertificateAndKey(path, domain string) (*x509.Certificate, *rsa.PrivateK
 	if err != nil {
 		return nil, nil, err
 	}
-	parentDomain := GetParentDomain(domain)
 	if IsWildcardCertificate(realCert) {
+		parentDomain := GetParentDomain(domain)
+		SubDomainDB[domain] = parentDomain
 		if err = SaveCertificate(path, parentDomain, fakeCert); err != nil {
 			return nil, nil, err
 		}
@@ -311,6 +299,7 @@ func GetCertificateAndKey(path, domain string) (*x509.Certificate, *rsa.PrivateK
 			return nil, nil, err
 		}
 	} else {
+		SubDomainDB[domain] = domain
 		if err = SaveCertificate(path, domain, fakeCert); err != nil {
 			return nil, nil, err
 		}
