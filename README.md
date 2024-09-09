@@ -3,6 +3,53 @@ A tool that converts the SOCKS5 protocol to HTTP and HTTPS protocols
 
 一个将socks5协议转化为http和https协议的工具
 
+## 抓不到包的常见原因
+
+1. 没有正确地将CA证书安装到/system/etc/security/cacerts（即没有将中间人CA证书安装到操作系统证书受信任根目录）
+2. 应用设置了SSL Pinning（即只信任应用包下的特定证书）
+3. 应用设置了NO_PROXY（即应用不走系统代理）或自行设置了应用层级的代理
+
+## 解决抓包困境的办法
+
+### 安装证书到/system/etc/security/cacerts目录
+
+#### 方法一：直接安装（适合UserDebug版本的系统）
+
+- 先使用remount.bat脚本重新挂载硬盘到系统盘
+  - 安卓设备ID：DeviceID，通过`adb devices`命令可以获取
+  - wait：重启参数，可选，有些设备需要重启才能挂载成功
+
+```shell
+.\remount.bat [安卓设备ID] [wait]
+```
+
+- 使用push.bat脚本上传CA证书到安卓设备
+  - 证书文件路径：CA证书文件所在的物理路径
+
+```shell
+.\push.bat [证书文件路径] [安卓设备ID]
+```
+
+#### 方法二：使用面具模块载入（适合真机）
+
+#### 方法三：使用frida动态注入（适合没有内存动态防护的应用）
+
+### 取消证书锁定SSL Unpinning
+
+#### 方法一：使用frida动态注入（适合没有内存动态防护的应用）
+
+#### 方法二：使用面具模块载入（适合真机）
+
+### 使用透明代理（iptables）
+
+#### 方法一：使用具有透明代理功能的代理应用
+
+- 如：Proxifier
+
+#### 方法二：使用frida动态注入（适合没有内存动态防护的应用）
+
+#### 方法三：系统命令设置iptables
+
 ## 目的
 
 在针对APP渗透测试过程中，会发现某些APP不走系统代理，排查过后发现并不是SSL Pinning的问题，针对这种情况，如何强制抓去不走系统代理的数据包呢？
