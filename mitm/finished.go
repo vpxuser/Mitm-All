@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"hash"
@@ -41,7 +42,7 @@ const (
 func VerifyPRF(version uint16, secret, label []byte, handshakeMessages [][]byte, outputLength int) []byte {
 	var hashFunc hash.Hash
 	switch version {
-	case VersionTLS102:
+	case tls.VersionTLS12:
 		hashFunc = sha256.New()
 	default:
 		return nil
@@ -89,11 +90,11 @@ var ReadFinished = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *C
 	if ctx.VerifyFinished {
 		verifyData := VerifyPRF(ctx.Version, ctx.MasterSecret, []byte(LabelClientFinished), ctx.HandshakeMessages, 12)
 		if hmac.Equal(verifyData, record.Handshake.Payload) {
-			return fmt.Errorf("%s verify Finished failed", tamplate)
+			return fmt.Errorf("%s Verify Client Finished Failed", tamplate)
 		}
-		yaklog.Infof("%s verify Finished successfully", tamplate)
+		yaklog.Infof("%s Verify Client Finished Successfully", tamplate)
 	} else {
-		yaklog.Infof("%s not need to verify Finished", tamplate)
+		yaklog.Infof("%s Not Need to Verify Finished", tamplate)
 	}
 	return nil
 })
@@ -106,9 +107,9 @@ var WriteFinished = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *
 	}
 
 	if _, err := conn.Write(blockRecord); err != nil {
-		return fmt.Errorf("%s write TLS Record failed : %v", tamplate, err)
+		return fmt.Errorf("%s Write Server Finished Failed : %v", tamplate, err)
 	}
 
-	yaklog.Infof("%s write TLS Record successfully", tamplate)
+	yaklog.Infof("%s Write Server Finished Successfully", tamplate)
 	return nil
 })

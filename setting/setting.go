@@ -18,12 +18,12 @@ var (
 
 func init() {
 	// 定义命令行参数
-	flag.IntVar(&Level, "level", 5, "日志级别1-5")
+	flag.IntVar(&Level, "level", 4, "日志级别1-5")
 	flag.BoolVar(&NoColor, "noColor", false, "日志颜色开关，默认开启")
 	flag.StringVar(&Host, "host", "0.0.0.0:1080", "SOCKS服务监听地址")
 	flag.BoolVar(&NoDebug, "noDebug", false, "SOCKS调试开关，默认开启")
-	flag.DurationVar(&ClientTimeout, "clientTimeout", 15*time.Second, "客户端连接超时设置，单位秒，默认15s")
-	flag.DurationVar(&TargetTimeout, "targetTimeout", 15*time.Second, "下游代理连接超时设置，单位秒，默认15s")
+	flag.DurationVar(&ClientTimeout, "clientTimeout", 60*time.Second, "客户端连接超时设置，单位秒，默认15s")
+	flag.DurationVar(&TargetTimeout, "targetTimeout", 60*time.Second, "下游代理连接超时设置，单位秒，默认15s")
 	flag.StringVar(&Proxy, "proxy", "http://127.0.0.1:8081", "下游代理地址")
 	flag.BoolVar(&Bound, "bound", false, "DNS解析绑定设置，默认不开启")
 	// 解析命令行参数

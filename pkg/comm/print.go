@@ -44,7 +44,7 @@ func SetColor(colorType int, payload any) string {
 
 // DumpRequest 打印更美观的 request 信息
 func DumpRequest(req *http.Request, displayBody bool, colorType int) {
-	dump, err := httputil.DumpRequest(req, displayBody)
+	dump, err := httputil.DumpRequestOut(req, displayBody)
 	if err != nil {
 		yaklog.Errorf("dump request failed : %v", err)
 		return

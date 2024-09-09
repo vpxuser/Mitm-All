@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/tls"
 	"socks2https/pkg/crypt"
 )
 
@@ -27,20 +28,20 @@ const (
 )
 
 var PRF = map[uint16]prf{
-	VersionTLS100: TLS100to101PRF,
-	VersionTLS101: TLS100to101PRF,
-	VersionTLS102: TLS102PRF,
+	tls.VersionTLS10: TLS10to11PRF,
+	tls.VersionTLS11: TLS10to11PRF,
+	tls.VersionTLS12: TLS12PRF,
 }
 
 type prf func(secret, label, seed []byte, outputLength int) []byte
 
-var TLS100to101PRF = prf(func(secret, label, seed []byte, outputLength int) []byte {
+var TLS10to11PRF = prf(func(secret, label, seed []byte, outputLength int) []byte {
 	pMD5 := crypt.PHash(secret, append(label, seed...), outputLength, md5.New)
 	pSHA1 := crypt.PHash(secret, append(label, seed...), outputLength, sha1.New)
 	return crypt.XOR(pMD5, pSHA1)[:outputLength]
 })
 
-var TLS102PRF = prf(func(secret, label, seed []byte, outputLength int) []byte {
+var TLS12PRF = prf(func(secret, label, seed []byte, outputLength int) []byte {
 	pSHA256 := crypt.PHash(secret, append(label, seed...), outputLength, sha256.New)
 	return pSHA256[:outputLength]
 })

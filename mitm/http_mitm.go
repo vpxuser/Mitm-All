@@ -2,50 +2,61 @@ package mitm
 
 import (
 	"bufio"
-	"fmt"
+	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
 	"net/http"
-	"socks2https/pkg/comm"
-	"socks2https/setting"
+	"socks2https/pkg/httptools"
 )
 
 var HttpMethod = map[string]string{
-	http.MethodGet:     http.MethodGet,
-	http.MethodHead:    http.MethodHead,
-	http.MethodPost:    http.MethodPost,
-	http.MethodPut:     http.MethodPut,
-	http.MethodPatch:   http.MethodPatch,
-	http.MethodDelete:  http.MethodDelete,
-	http.MethodConnect: http.MethodConnect,
-	http.MethodOptions: http.MethodOptions,
-	http.MethodTrace:   http.MethodTrace,
+	http.MethodGet[:3]:     http.MethodGet,
+	http.MethodHead[:3]:    http.MethodHead,
+	http.MethodPost[:3]:    http.MethodPost,
+	http.MethodPut[:3]:     http.MethodPut,
+	http.MethodPatch[:3]:   http.MethodPatch,
+	http.MethodDelete[:3]:  http.MethodDelete,
+	http.MethodConnect[:3]: http.MethodConnect,
+	http.MethodOptions[:3]: http.MethodOptions,
+	http.MethodTrace[:3]:   http.MethodTrace,
 }
 
-func HTTPMITM(reader *bufio.Reader, conn net.Conn) error {
-	Tag := fmt.Sprintf("[%s]", conn.RemoteAddr().String())
+func HTTPMITM(reader *bufio.Reader, conn net.Conn, ctx *Context) {
 	defer conn.Close()
-	req, err := http.ReadRequest(reader)
+	req, err := httptools.ReadRequest(reader, "http")
 	if err != nil {
-		return fmt.Errorf("%s read HTTP Request failed : %v", Tag, err)
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
+		return
 	}
-	comm.DumpRequest(req, true, comm.RED_COLOR_TYPE)
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   setting.TargetTimeout,
-				KeepAlive: setting.TargetTimeout,
-			}).DialContext,
-			ForceAttemptHTTP2: false,
-		},
+
+	ctx.ModifyRequestPiPeLine = []ModifyRequest{
+		DNSRequest,
+		DebugRequest,
 	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("%s read HTTP Response from Target failed : %v", Tag, err)
+
+	for _, modifyRequest := range ctx.ModifyRequestPiPeLine {
+		ctx.Request, ctx.Response = modifyRequest(req, ctx)
 	}
-	defer resp.Body.Close()
-	comm.DumpResponse(resp, true, comm.RED_COLOR_TYPE)
-	if err = resp.Write(conn); err != nil {
-		return fmt.Errorf("%s write HTTP Response to Client failed : %v", Tag, err)
+
+	ctx.ModifyResponsePiPeLine = []ModifyResponse{
+		GzipDecompressResponse,
+		HTTPDNSResponse,
+		GzipCompressResponse,
+		DebugResponse,
 	}
-	return nil
+
+	if ctx.Response == nil {
+		ctx.Response, err = ctx.HttpClient.Do(ctx.Request)
+		if err != nil {
+			yaklog.Errorf("%s Write Request Failed : %v", ctx.Mitm2ClientLog, err)
+			return
+		}
+		for _, modifyResponse := range ctx.ModifyResponsePiPeLine {
+			ctx.Response = modifyResponse(ctx.Response, ctx)
+		}
+	}
+
+	if err = ctx.Response.Write(conn); err != nil {
+		yaklog.Errorf("%s Write HTTP Response Failed : %v", ctx.Mitm2ClientLog, err)
+		return
+	}
 }

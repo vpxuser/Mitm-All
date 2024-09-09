@@ -29,8 +29,8 @@ var WriteServerHelloDone = HandleRecord(func(reader *bufio.Reader, conn net.Conn
 	record := NewServerHelloDone(ctx)
 	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
 	if _, err := conn.Write(record.GetRaw()); err != nil {
-		return fmt.Errorf("%s write TLS Record failed : %v", tamplate, err)
+		return fmt.Errorf("%s Write ServerHelloDone Failed : %v", tamplate, err)
 	}
-	yaklog.Infof("%s write TLS Record successfully", tamplate)
+	yaklog.Infof("%s Write ServerHelloDone Successfully", tamplate)
 	return nil
 })

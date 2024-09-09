@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 	"socks2https/pkg/comm"
-	"socks2https/pkg/dnstools"
+	"socks2https/pkg/dnsutils"
 )
 
 var (
@@ -17,7 +17,7 @@ var (
 
 var DNSRequest = ModifyRequest(func(req *http.Request, ctx *Context) (*http.Request, *http.Response) {
 	if _, ok := Domain2IP[req.Host]; !ok {
-		ipv4s, err := dnstools.DNS2IPv4(req.Host, ctx.DNSServer)
+		ipv4s, err := dnsutils.DNS2IPv4(req.Host, ctx.DNSServer)
 		if err != nil {
 			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, err))
 			return req, nil

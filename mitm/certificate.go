@@ -92,8 +92,8 @@ var WriteCertificate = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ct
 	}
 	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
 	if _, err = conn.Write(record.GetRaw()); err != nil {
-		return fmt.Errorf("%s write TLS Record failed : %v", tamplate, err)
+		return fmt.Errorf("%s Write Certificate Failed : %v", tamplate, err)
 	}
-	yaklog.Infof("%s write TLS Record Successfully", tamplate)
+	yaklog.Infof("%s Write Certificate Successfully", tamplate)
 	return nil
 })

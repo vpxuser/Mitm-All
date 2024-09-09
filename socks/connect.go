@@ -2,6 +2,7 @@ package socks
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
@@ -13,9 +14,8 @@ import (
 )
 
 func Connect(conn net.Conn, ctx *mitm.Context) error {
-	// 创建一个缓冲区，缓冲区默认1GB
-	reader := bufio.NewReaderSize(conn, ctx.BufferSize)
-	header, err := reader.Peek(7)
+	reader := bufio.NewReader(conn)
+	header, err := reader.Peek(3)
 	if err != nil {
 		return fmt.Errorf("read Protocol Header failed : %v", err)
 	}
@@ -23,20 +23,33 @@ func Connect(conn net.Conn, ctx *mitm.Context) error {
 	if _, ok := mitm.ContentType[header[0]]; ok {
 		maybeTLS = true
 	} else if httpMethod, ok := mitm.HttpMethod[strings.TrimSpace(string(header))]; ok {
+		ctx.Client2MitmLog = fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "HTTP"))
+		ctx.Mitm2ClientLog = fmt.Sprintf("%s [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "HTTP"))
+		ctx.Client2TargetLog = fmt.Sprintf("%s [%s]", ctx.Client2TargetLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "HTTP"))
+		ctx.Target2ClientLog = fmt.Sprintf("%s [%s]", ctx.Target2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "HTTP"))
 		if httpMethod == http.MethodConnect {
-			yaklog.Infof("%s %s", ctx.LogTamplate, comm.SetColor(comm.RED_BG_COLOR_TYPE, comm.SetColor(comm.YELLOW_COLOR_TYPE, "use HTTP CONNECT Connection")))
+			yaklog.Infof("%s %s", ctx.LogTamplate, comm.SetColor(comm.RED_COLOR_TYPE, "Connection Protocol is HTTP CONNECT Tunnel"))
 		}
-		yaklog.Infof("%s %s", ctx.LogTamplate, comm.SetColor(comm.RED_COLOR_TYPE, "use HTTP Connection"))
-		return mitm.HTTPMITM(reader, conn)
+		yaklog.Infof("%s %s", ctx.LogTamplate, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Connection Protocol is HTTP"))
+		mitm.HTTPMITM(reader, conn, ctx)
+		return nil
 	}
 	if maybeTLS {
+		ctx.Client2MitmLog = fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "TLS"))
+		ctx.Mitm2ClientLog = fmt.Sprintf("%s [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "TLS"))
+		ctx.Client2TargetLog = fmt.Sprintf("%s [%s]", ctx.Client2TargetLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "TLS"))
+		ctx.Target2ClientLog = fmt.Sprintf("%s [%s]", ctx.Target2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "TLS"))
 		version := binary.BigEndian.Uint16(header[1:3])
-		if version >= mitm.VersionSSL300 && version <= mitm.VersionTLS103 {
-			yaklog.Infof("%s %s", ctx.LogTamplate, comm.SetColor(comm.YELLOW_BG_COLOR_TYPE, comm.SetColor(comm.RED_COLOR_TYPE, "use TSL Connection")))
+		if version >= tls.VersionSSL30 && version <= tls.VersionTLS13 {
+			yaklog.Infof("%s %s", ctx.LogTamplate, comm.SetColor(comm.RED_COLOR_TYPE, "Connection Protocol is TLS"))
 			mitm.TLSMITM(reader, conn, ctx)
 			return nil
 		}
 	}
-	yaklog.Infof("%s Client use TCP connection", ctx.LogTamplate)
+	ctx.Client2MitmLog = fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "TCP"))
+	ctx.Mitm2ClientLog = fmt.Sprintf("%s [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "TCP"))
+	ctx.Client2TargetLog = fmt.Sprintf("%s [%s]", ctx.Client2TargetLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "TCP"))
+	ctx.Target2ClientLog = fmt.Sprintf("%s [%s]", ctx.Target2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "TCP"))
+	yaklog.Infof("%s Connection Protocol is TCP", ctx.LogTamplate)
 	return mitm.TCPMITM(reader, conn, ctx)
 }

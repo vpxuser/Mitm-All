@@ -9,18 +9,16 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"math/big"
-	"net/http"
 	"os"
 	"socks2https/pkg/comm"
 	"strings"
 	"time"
 )
 
-const CertificateAndPrivateKeyPath = "config"
-
 var (
 	CertificateDB = make(map[string]*x509.Certificate)
 	PrivateKeyDB  = make(map[string]*rsa.PrivateKey)
+	SubDomainDB   = make(map[string]string)
 )
 
 func init() {
@@ -78,7 +76,7 @@ func GetParentDomain(domain string) string {
 	if len(parts) < 2 {
 		return ""
 	}
-	return strings.Join(parts[len(parts)-2:], ".")
+	return strings.Join(parts[1:], ".")
 }
 
 func LoadCert(path string) (*x509.Certificate, error) {
@@ -122,29 +120,46 @@ func LoadKey(path string) (*rsa.PrivateKey, error) {
 }
 
 func GetRealCertificate(domain string) (*x509.Certificate, error) {
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, // 跳过证书验证，仅用于测试
-			},
-		},
-	}
-	url := fmt.Sprintf("https://%s", domain)
-	yaklog.Debugf(comm.SetColor(comm.YELLOW_COLOR_TYPE, fmt.Sprintf("get Certificate from : %s", url)))
-	resp, err := client.Get(url)
+	conn, err := tls.Dial("tcp", domain+":443", &tls.Config{
+		InsecureSkipVerify: true, // 忽略证书验证
+	})
 	if err != nil {
-		return nil, fmt.Errorf("get Certificate Template failed : %v", err)
+		return nil, fmt.Errorf("Connect to [%s:443] Failed : %v", domain, err)
 	}
-	defer resp.Body.Close()
-	tlsState := resp.TLS
-	if tlsState == nil {
-		return nil, fmt.Errorf("no TLS Connection")
+	defer conn.Close()
+
+	// 获取证书链
+	certs := conn.ConnectionState().PeerCertificates
+	if len(certs) > 0 {
+		return certs[0], nil
 	}
-	if len(tlsState.PeerCertificates) > 0 {
-		return tlsState.PeerCertificates[0], nil
-	}
-	return nil, fmt.Errorf("no Certificate exist")
+	return nil, fmt.Errorf("No Certificate Exist")
 }
+
+//func GetRealCertificate(domain string) (*x509.Certificate, error) {
+//	client := &http.Client{
+//		Transport: &http.Transport{
+//			TLSClientConfig: &tls.Config{
+//				InsecureSkipVerify: true, // 跳过证书验证，仅用于测试
+//			},
+//		},
+//	}
+//	url := fmt.Sprintf("https://%s", domain)
+//	yaklog.Debugf(comm.SetColor(comm.YELLOW_COLOR_TYPE, fmt.Sprintf("get Certificate from : %s", url)))
+//	resp, err := client.Get(url)
+//	if err != nil {
+//		return nil, fmt.Errorf("get Certificate Template failed : %v", err)
+//	}
+//	defer resp.Body.Close()
+//	tlsState := resp.TLS
+//	if tlsState == nil {
+//		return nil, fmt.Errorf("no TLS Connection")
+//	}
+//	if len(tlsState.PeerCertificates) > 0 {
+//		return tlsState.PeerCertificates[0], nil
+//	}
+//	return nil, fmt.Errorf("no Certificate exist")
+//}
 
 // CreateFakeCertificate 用于生成 MITM 证书的函数，传入 CA 证书、密钥和目标域名证书模板
 func CreateFakeCertificate(caCert *x509.Certificate, caKey *rsa.PrivateKey, realCert *x509.Certificate, key *rsa.PrivateKey) (*x509.Certificate, error) {
@@ -260,6 +275,7 @@ func SaveCertificate(path, domain string, certDER *x509.Certificate) error {
 	return nil
 }
 
+// todo 通配符域名bug修复
 func GetCertificateAndKey(path, domain string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	fakeCert, notExist := GetCertificate(path, domain)
 	fakeKey, err := GetKey(path, domain)

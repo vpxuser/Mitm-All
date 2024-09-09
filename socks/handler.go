@@ -11,12 +11,12 @@ func Handler(conn net.Conn, ctx *mitm.Context) {
 		yaklog.Errorf("%s %v", ctx.LogTamplate, err)
 		return
 	}
-	yaklog.Infof("%s finish socks handshake", ctx.LogTamplate)
+	yaklog.Debugf("%s Finish SOCKS Handshake", ctx.LogTamplate)
 	if err := Runcmd(conn, ctx); err != nil {
 		yaklog.Errorf("%s %v", ctx.LogTamplate, err)
 		return
 	}
-	yaklog.Infof("%s finish socks command", ctx.LogTamplate)
+	yaklog.Infof("%s Finish SOCKS Command", ctx.LogTamplate)
 	switch ctx.Cmd {
 	case CONNECT_CMD:
 		if err := Connect(conn, ctx); err != nil {
@@ -24,8 +24,8 @@ func Handler(conn net.Conn, ctx *mitm.Context) {
 			return
 		}
 	default:
-		yaklog.Warnf("%s not support CMD : %d", ctx.LogTamplate, ctx.Cmd)
+		yaklog.Warnf("%s Not Support CMD : %d", ctx.LogTamplate, ctx.Cmd)
 		return
 	}
-	yaklog.Infof("%s connection transfer fisished", ctx.LogTamplate)
+	yaklog.Infof("%s Transfer Finished", ctx.LogTamplate)
 }

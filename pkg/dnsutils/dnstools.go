@@ -1,4 +1,4 @@
-package dnstools
+package dnsutils
 
 import (
 	"context"

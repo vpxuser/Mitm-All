@@ -2,10 +2,9 @@ package mitm
 
 import (
 	"bufio"
-	"encoding/binary"
 	"fmt"
-	"io"
 	"socks2https/pkg/comm"
+	"socks2https/pkg/tlsutils"
 )
 
 func readUnknownRecord(data []byte, ctx *Context) (*Record, error) {
@@ -24,19 +23,12 @@ func readUnknownRecord(data []byte, ctx *Context) (*Record, error) {
 }
 
 func FilterRecord(reader *bufio.Reader, contentType uint8, handshakeType uint8, ctx *Context) (*Record, error) {
-	header := make([]byte, 5)
-	if _, err := reader.Read(header); err != nil && err != io.EOF {
-		return nil, fmt.Errorf("read TLS Record Header failed : %v", err)
+	unknownRecord, err := tlsutils.ReadTLSRecord(reader)
+	if err != nil {
+		return nil, err
 	}
 
-	length := binary.BigEndian.Uint16(header[3:5])
-
-	fragment := make([]byte, length)
-	if _, err := reader.Read(fragment); err != nil && err != io.EOF {
-		return nil, fmt.Errorf("read TLS Record Fragment failed : %v", err)
-	}
-
-	record, err := readUnknownRecord(append(header, fragment...), ctx)
+	record, err := readUnknownRecord(unknownRecord, ctx)
 	if err != nil {
 		return nil, err
 	}

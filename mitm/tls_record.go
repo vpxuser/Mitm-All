@@ -31,13 +31,13 @@ const (
 )
 
 // TLS 版本
-const (
-	VersionSSL300 uint16 = 0x0300 // SSL 3.0
-	VersionTLS100 uint16 = 0x0301 // TLS 1.0
-	VersionTLS101 uint16 = 0x0302 // TLS 1.1
-	VersionTLS102 uint16 = 0x0303 // TLS 1.2
-	VersionTLS103 uint16 = 0x0304 // TLS 1.3
-)
+//const (
+//	VersionSSL300 uint16 = 0x0300 // SSL 3.0
+//	VersionTLS100 uint16 = 0x0301 // TLS 1.0
+//	VersionTLS101 uint16 = 0x0302 // TLS 1.1
+//	VersionTLS102 uint16 = 0x0303 // TLS 1.2
+//	VersionTLS103 uint16 = 0x0304 // TLS 1.3
+//)
 
 var ContentType = map[uint8]string{
 	ContentTypeChangeCipherSpec:    "Change Cipher Spec",
@@ -123,10 +123,14 @@ func ParseRecord(data []byte, ctx *Context) (*Record, error) {
 		Version:     binary.BigEndian.Uint16(data[1:3]),
 		Length:      binary.BigEndian.Uint16(data[3:5]),
 	}
-	if len(data) != 5+int(record.Length) {
+	//if len(data) != 5+int(record.Length) {
+	//	return nil, fmt.Errorf("TLS Record Fragment is incomplete")
+	//}
+	//record.Fragment = data[5 : 5+record.Length]
+	if len(data) < 5+int(record.Length) {
 		return nil, fmt.Errorf("TLS Record Fragment is incomplete")
 	}
-	record.Fragment = data[5 : 5+record.Length]
+	record.Fragment = data[5:]
 	switch record.ContentType {
 	case ContentTypeHandshake:
 		handshake, err := ParseHandshake(record.Fragment, ctx)

@@ -86,7 +86,7 @@ var ReadClientHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx
 		}
 		// todo defalut Certificate
 		ctx.Domain = ctx.DefaultDomain
-		yaklog.Infof("%s use Default Domain : %s", tamplate, ctx.Domain)
+		yaklog.Infof("%s Use Default Domain : %s", tamplate, ctx.Domain)
 		return nil
 		//return fmt.Errorf("%s query DNS Record failed", tamplate)
 	}

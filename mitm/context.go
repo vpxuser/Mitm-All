@@ -3,12 +3,15 @@ package mitm
 import (
 	"crypto/rsa"
 	"crypto/sha1"
+	"crypto/tls"
 	"crypto/x509"
 	"github.com/google/uuid"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"hash"
+	"net"
 	"net/http"
 	"net/url"
+	"socks2https/setting"
 )
 
 const (
@@ -28,7 +31,6 @@ type Context struct {
 	Mitm2ClientLog         string
 	Client2TargetLog       string
 	Target2ClientLog       string
-	BufferSize             int
 	Version                uint16
 	ClientRandom           [32]byte
 	ServerRandom           [32]byte
@@ -70,9 +72,8 @@ type Context struct {
 
 func NewContext(cipherSuite uint16) *Context {
 	ctx := &Context{
-		ContextId:      uuid.New().String(),
-		BufferSize:     GB,
-		Version:        VersionTLS102,
+		ContextId:      uuid.New().String()[:8],
+		Version:        tls.VersionTLS12,
 		CipherSuite:    cipherSuite,
 		ConfigPath:     "config",
 		VerifyMAC:      false,
@@ -82,18 +83,29 @@ func NewContext(cipherSuite uint16) *Context {
 		DefaultDomain:  "okii.com",
 	}
 
-	ctx.HttpClient = &http.Client{}
+	ctx.HttpClient = &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   setting.TargetTimeout,
+				KeepAlive: setting.TargetTimeout,
+			}).DialContext,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+			ForceAttemptHTTP2: false,
+		},
+	}
+
 	if ctx.Proxy != "" {
 		proxyURL, err := url.Parse(ctx.Proxy)
 		if err != nil {
-			yaklog.Fatalf("Proxy URL is invalid : %v", err)
+			yaklog.Fatalf("Proxy URL is Invalid : %v", err)
 		}
-		ctx.HttpClient.Transport = &http.Transport{
-			Proxy: http.ProxyURL(proxyURL),
-		}
+		ctx.HttpClient.Transport.(*http.Transport).Proxy = http.ProxyURL(proxyURL)
 	}
+
 	switch cipherSuite {
-	case TLS_RSA_WITH_AES_128_CBC_SHA:
+	case tls.TLS_RSA_WITH_AES_128_CBC_SHA:
 		ctx.MACLength = 20
 		ctx.BlockLength = 16
 		ctx.HashFunc = sha1.New

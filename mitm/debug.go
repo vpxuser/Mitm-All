@@ -10,11 +10,12 @@ import (
 
 var DebugRequest = ModifyRequest(func(req *http.Request, ctx *Context) (*http.Request, *http.Response) {
 	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Application Data"), comm.SetColor(comm.RED_COLOR_TYPE, "Request"))
-	dump, err := httputil.DumpRequest(req, true)
+	dump, err := httputil.DumpRequestOut(req, true)
 	if err != nil {
 		yaklog.Warnf("%s dump Request failed : %v", tamplate, err)
+	} else {
+		yaklog.Infof("%s\n%s", tamplate, dump)
 	}
-	yaklog.Infof("%s\n%s", tamplate, dump)
 	return req, nil
 })
 
@@ -23,7 +24,8 @@ var DebugResponse = ModifyResponse(func(resp *http.Response, ctx *Context) *http
 	dump, err := httputil.DumpResponse(resp, true)
 	if err != nil {
 		yaklog.Warnf("%s dump Response failed : %v", tamplate, err)
+	} else {
+		yaklog.Infof("%s\n%s", tamplate, dump)
 	}
-	yaklog.Infof("%s\n%s", tamplate, dump)
 	return resp
 })

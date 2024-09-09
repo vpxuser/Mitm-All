@@ -32,15 +32,18 @@ func TLSMITM(reader *bufio.Reader, conn net.Conn, ctx *Context) {
 	defer conn.Close()
 	ctx.ModifyRequestPiPeLine = []ModifyRequest{
 		DNSRequest,
-		//DebugRequest,
+		DebugRequest,
 	}
 	ctx.ModifyResponsePiPeLine = []ModifyResponse{
+		GzipDecompressResponse,
 		HTTPDNSResponse,
-		//DebugResponse,
+		GzipCompressResponse,
+		DebugResponse,
 	}
 	for _, handler := range HandleTLSRecordPipeLine {
 		if err := handler(reader, conn, ctx); err != nil {
 			return
 		}
 	}
+
 }

@@ -114,7 +114,7 @@ func Runcmd(conn net.Conn, ctx *mitm.Context) error {
 	port := (uint16(buf[0]) << 8) + uint16(buf[1])
 	ctx.Port = port
 	addr := fmt.Sprintf("%s:%d", host, port)
-	yaklog.Infof("%s Target address : %s", ctx.LogTamplate, comm.SetColor(comm.GREEN_COLOR_TYPE, addr))
+	yaklog.Infof("%s Target Address : %s", ctx.LogTamplate, comm.SetColor(comm.GREEN_COLOR_TYPE, addr))
 	// 服务端响应包
 	// +-----+-----+-------+------+----------+----------+
 	// | VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
