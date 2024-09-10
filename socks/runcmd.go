@@ -5,7 +5,7 @@ import (
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
 	"socks2https/mitm"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 	"socks2https/setting"
 )
 
@@ -114,7 +114,7 @@ func Runcmd(conn net.Conn, ctx *mitm.Context) error {
 	port := (uint16(buf[0]) << 8) + uint16(buf[1])
 	ctx.Port = port
 	addr := fmt.Sprintf("%s:%d", host, port)
-	yaklog.Infof("%s Target Address : %s", ctx.LogTamplate, comm.SetColor(comm.GREEN_COLOR_TYPE, addr))
+	yaklog.Infof("%s Target Address : %s", ctx.LogTamplate, color.SetColor(color.GREEN_COLOR_TYPE, addr))
 	// 服务端响应包
 	// +-----+-----+-------+------+----------+----------+
 	// | VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
@@ -122,7 +122,7 @@ func Runcmd(conn net.Conn, ctx *mitm.Context) error {
 	// |  1  |  1  |   1   |   1  | Variable |    2     |
 	// +-----+-----+-------+------+----------+----------+
 	resp := []byte{SOCKS5_VERSION, SUCCEEDED_REP, RESERVED}
-	if setting.Bound {
+	if setting.Config.Socks.Bound {
 		resp = append(resp, aTyp)
 		if aLen != 0x00 {
 			resp = append(resp, aLen)

@@ -6,7 +6,7 @@ import (
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
 	"socks2https/pkg/cert"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 )
 
 type Certificate struct {
@@ -85,7 +85,7 @@ func (c *Certificate) GetRaw() []byte {
 }
 
 var WriteCertificate = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
-	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Handshake"), comm.SetColor(comm.RED_COLOR_TYPE, "Certificate"))
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Mitm2ClientLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Handshake"), color.SetColor(color.RED_COLOR_TYPE, "Certificate"))
 	record, err := NewCertificate(ctx.ConfigPath, ctx)
 	if err != nil {
 		return fmt.Errorf("%s %v", tamplate, err)

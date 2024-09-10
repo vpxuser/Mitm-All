@@ -5,7 +5,7 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 )
 
 func NewChangeCipherSpec(ctx *Context) *Record {
@@ -18,7 +18,7 @@ func NewChangeCipherSpec(ctx *Context) *Record {
 }
 
 var ReadChangeCipherSpec = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
-	tamplate := fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Change Cipher Spec"))
+	tamplate := fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Change Cipher Spec"))
 	if _, err := FilterRecord(reader, ContentTypeChangeCipherSpec, 0xff, ctx); err != nil {
 		return fmt.Errorf("%s %v", tamplate, err)
 	}
@@ -28,7 +28,7 @@ var ReadChangeCipherSpec = HandleRecord(func(reader *bufio.Reader, conn net.Conn
 })
 
 var WriteChangeCipherSpec = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
-	tamplate := fmt.Sprintf("%s [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Change Cipher Spec"))
+	tamplate := fmt.Sprintf("%s [%s]", ctx.Mitm2ClientLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Change Cipher Spec"))
 	if _, err := conn.Write(NewChangeCipherSpec(ctx).GetRaw()); err != nil {
 		return fmt.Errorf("%s Write ChangeCipherSpec Failed : %v", tamplate, err)
 	}

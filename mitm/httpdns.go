@@ -6,10 +6,12 @@ import (
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"io"
 	"net/http"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 	"socks2https/pkg/dnsutils"
+	"socks2https/setting"
 )
 
+// todo 并发锁
 var (
 	Domain2IP = make(map[string]map[string]struct{})
 	IP2Domain = make(map[string][]string)
@@ -17,9 +19,9 @@ var (
 
 var DNSRequest = ModifyRequest(func(req *http.Request, ctx *Context) (*http.Request, *http.Response) {
 	if _, ok := Domain2IP[req.Host]; !ok {
-		ipv4s, err := dnsutils.DNS2IPv4(req.Host, ctx.DNSServer)
+		ipv4s, err := dnsutils.DNS2IPv4(req.Host, setting.Config.DNS)
 		if err != nil {
-			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, err))
+			yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, err))
 			return req, nil
 		}
 		for _, ipv4 := range ipv4s {

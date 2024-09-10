@@ -22,7 +22,7 @@ var GzipDecompressResponse = ModifyResponse(func(resp *http.Response, ctx *Conte
 		}
 		resp.Body = io.NopCloser(bytes.NewBuffer(decompressedBody))
 		resp.ContentLength = int64(len(decompressedBody))
-		//comm.DumpResponse(resp, true, comm.RED_COLOR_TYPE)
+		//color.DumpResponse(resp, true, color.RED_COLOR_TYPE)
 		//resp.ContentLength = int64(len(body))
 		//resp.Body = io.NopCloser(bytes.NewBuffer(body))
 	}

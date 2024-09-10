@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 )
 
 const (
@@ -73,7 +73,7 @@ func (e *Extension) GetRaw() []byte {
 		case ExtensionTypeServerName:
 			return append(extension, e.ServerName.GetRaw()...)
 		default:
-			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Extension Type : %d", e.Type)))
+			yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Extension Type : %d", e.Type)))
 		}
 	}
 	return append(extension, e.Payload...)

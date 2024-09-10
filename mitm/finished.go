@@ -9,7 +9,8 @@ import (
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"hash"
 	"net"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
+	"socks2https/setting"
 )
 
 const (
@@ -59,7 +60,7 @@ func NewFinished(ctx *Context) *Record {
 	//	yaklog.Debugf("Handshake Messages %d : %v", i, h)
 	//}
 	verifyData := VerifyPRF(ctx.Version, ctx.MasterSecret, []byte(LabelServerFinished), ctx.HandshakeMessages, 12)
-	//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
+	//yaklog.Debugf(color.SetColor(color.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
 	//yaklog.Debugf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)
 	handshake := &Handshake{
 		HandshakeType: HandshakeTypeFinished,
@@ -78,7 +79,7 @@ func NewFinished(ctx *Context) *Record {
 }
 
 var ReadFinished = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
-	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Handshake"), comm.SetColor(comm.RED_COLOR_TYPE, "Finished"))
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Handshake"), color.SetColor(color.RED_COLOR_TYPE, "Finished"))
 
 	record, err := FilterRecord(reader, ContentTypeHandshake, HandshakeTypeFinished, ctx)
 	if err != nil {
@@ -87,7 +88,7 @@ var ReadFinished = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *C
 
 	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
 
-	if ctx.VerifyFinished {
+	if setting.Config.TLS.VerifyFinished {
 		verifyData := VerifyPRF(ctx.Version, ctx.MasterSecret, []byte(LabelClientFinished), ctx.HandshakeMessages, 12)
 		if hmac.Equal(verifyData, record.Handshake.Payload) {
 			return fmt.Errorf("%s Verify Client Finished Failed", tamplate)
@@ -100,7 +101,7 @@ var ReadFinished = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *C
 })
 
 var WriteFinished = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
-	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Mitm2ClientLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Handshake"), comm.SetColor(comm.RED_COLOR_TYPE, "Finished"))
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Mitm2ClientLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Handshake"), color.SetColor(color.RED_COLOR_TYPE, "Finished"))
 	blockRecord, err := NewBlockRecord(NewFinished(ctx), ctx)
 	if err != nil {
 		return fmt.Errorf("%s %v", tamplate, err)

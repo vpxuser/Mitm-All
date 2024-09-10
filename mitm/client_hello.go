@@ -6,7 +6,8 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
+	"socks2https/setting"
 )
 
 type ClientHello struct {
@@ -59,7 +60,7 @@ func ParseClientHello(data []byte) (*ClientHello, error) {
 }
 
 var ReadClientHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
-	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Handshake"), comm.SetColor(comm.RED_COLOR_TYPE, "Client Hello"))
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Handshake"), color.SetColor(color.RED_COLOR_TYPE, "Client Hello"))
 	record, err := FilterRecord(reader, ContentTypeHandshake, HandshakeTypeClientHello, ctx)
 	if err != nil {
 		return err
@@ -84,11 +85,9 @@ var ReadClientHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx
 			yaklog.Infof("%s Parse CDN IP %s to Domain %s", tamplate, ctx.Host, ctx.Domain)
 			return nil
 		}
-		// todo defalut Certificate
-		ctx.Domain = ctx.DefaultDomain
+		ctx.Domain = setting.Config.TLS.DefaultSNI
 		yaklog.Infof("%s Use Default Domain : %s", tamplate, ctx.Domain)
 		return nil
-		//return fmt.Errorf("%s query DNS Record failed", tamplate)
 	}
 	return fmt.Errorf("%s not support Cipher Suites", tamplate)
 })

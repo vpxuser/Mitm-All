@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"socks2https/pkg/cert"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 	"socks2https/pkg/httptools"
 )
 
@@ -28,7 +28,7 @@ func NewApplicationData(resp *http.Response, ctx *Context) (*Record, error) {
 }
 
 var ReadApplicationData = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
-	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Application Data"), comm.SetColor(comm.RED_COLOR_TYPE, "Request"))
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Application Data"), color.SetColor(color.RED_COLOR_TYPE, "Request"))
 
 	record, err := FilterRecord(reader, ContentTypeApplicationData, 0xff, ctx)
 	if err != nil {
@@ -44,7 +44,7 @@ var ReadApplicationData = HandleRecord(func(reader *bufio.Reader, conn net.Conn,
 	//yaklog.Infof("%s read TLS Record successfully", tamplate)
 
 	if ctx.Request.Host == "api.watch.okii.com" {
-		yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, cert.CertificateDB["api.watch.okii.com"]))
+		yaklog.Debugf(color.SetColor(color.RED_COLOR_TYPE, cert.CertificateDB["api.watch.okii.com"]))
 	}
 
 	// HTTP Request 报文篡改
@@ -52,12 +52,12 @@ var ReadApplicationData = HandleRecord(func(reader *bufio.Reader, conn net.Conn,
 		ctx.Request, ctx.Response = modifyRequest(ctx.Request, ctx)
 	}
 
-	//comm.DumpRequest(ctx.Request, true, comm.RED_COLOR_TYPE)
+	//color.DumpRequest(ctx.Request, true, color.RED_COLOR_TYPE)
 	return nil
 })
 
 var WriteApplicationData = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
-	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Application Data"), comm.SetColor(comm.RED_COLOR_TYPE, "Response"))
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Application Data"), color.SetColor(color.RED_COLOR_TYPE, "Response"))
 
 	if ctx.Response == nil {
 		resp, err := ctx.HttpClient.Do(ctx.Request)

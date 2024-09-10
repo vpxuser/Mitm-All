@@ -1,0 +1,15 @@
+log:
+  colorSwitch: true
+  level: 5
+socks:
+  host: 0.0.0.0:1080
+  clientTimeout: 60s
+  targetTimeout: 60s
+  bound: false
+tls:
+  verifyFinished: true
+  verifyMAC: false
+  defaultSNI: okii.com
+http:
+  proxy: http://127.0.0.1:8080
+dns: 114.114.114.114

@@ -5,11 +5,11 @@ go 1.22
 toolchain go1.22.3
 
 require (
-	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/google/uuid v1.5.0
 	github.com/kataras/golog v0.1.12
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/yaklang/yaklang v1.3.3
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

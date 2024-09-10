@@ -6,7 +6,7 @@ import (
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
 	"socks2https/mitm"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 )
 
 const (
@@ -63,7 +63,7 @@ func Handshake(conn net.Conn, ctx *mitm.Context) error {
 			method = NO_ACCEPTABLE_METHOD
 		}
 	}
-	yaklog.Debugf("%s Receive Client SOCKS Handshake : %s", ctx.LogTamplate, comm.SetColor(comm.GREEN_COLOR_TYPE, fmt.Sprintf("%v", append(buf, methods...))))
+	yaklog.Debugf("%s Receive Client SOCKS Handshake : %s", ctx.LogTamplate, color.SetColor(color.GREEN_COLOR_TYPE, fmt.Sprintf("%v", append(buf, methods...))))
 	// 服务端响应包
 	// +----+--------+
 	// |VER | METHOD |

@@ -1,40 +1,56 @@
 package setting
 
 import (
-	"flag"
+	"github.com/kataras/golog"
+	yaklog "github.com/yaklang/yaklang/common/log"
+	"gopkg.in/yaml.v3"
+	"os"
 	"time"
 )
 
-var (
-	Level         int
-	NoColor       bool
-	Host          string
-	NoDebug       bool
-	ClientTimeout time.Duration
-	TargetTimeout time.Duration
-	Proxy         string
-	Bound         bool
+const (
+	ConfigPath = "config/config.yaml"
 )
 
+var Config Configure
+
+type Configure struct {
+	Log   Log    `yaml:"log"`
+	Socks Socks  `yaml:"socks"`
+	TLS   TLS    `yaml:"tls"`
+	HTTP  HTTP   `yaml:"http"`
+	DNS   string `yaml:"dns"`
+}
+
+type Log struct {
+	ColorSwitch bool        `yaml:"colorSwitch"`
+	Level       golog.Level `yaml:"level"`
+}
+
+type Socks struct {
+	Host          string        `yaml:"host"`
+	ClientTimeout time.Duration `yaml:"clientTimeout"`
+	TargetTimeout time.Duration `yaml:"targetTimeout"`
+	Bound         bool          `yaml:"bound"`
+}
+
+type TLS struct {
+	VerifyFinished bool   `yaml:"verifyFinished"`
+	VerifyMAC      bool   `yaml:"verifyMAC"`
+	DefaultSNI     string `yaml:"defaultSNI"`
+}
+
+type HTTP struct {
+	Proxy string `yaml:"proxy"`
+}
+
 func init() {
-	// 定义命令行参数
-	flag.IntVar(&Level, "level", 4, "日志级别1-5")
-	flag.BoolVar(&NoColor, "noColor", false, "日志颜色开关，默认开启")
-	flag.StringVar(&Host, "host", "0.0.0.0:1080", "SOCKS服务监听地址")
-	flag.BoolVar(&NoDebug, "noDebug", false, "SOCKS调试开关，默认开启")
-	flag.DurationVar(&ClientTimeout, "clientTimeout", 60*time.Second, "客户端连接超时设置，单位秒，默认15s")
-	flag.DurationVar(&TargetTimeout, "targetTimeout", 60*time.Second, "下游代理连接超时设置，单位秒，默认15s")
-	flag.StringVar(&Proxy, "proxy", "http://127.0.0.1:8081", "下游代理地址")
-	flag.BoolVar(&Bound, "bound", false, "DNS解析绑定设置，默认不开启")
-	// 解析命令行参数
-	flag.Parse()
-	// 输出调试信息
-	//fmt.Printf("Level:%v\n", Level)
-	//fmt.Printf("NoColor:%v\n", NoColor)
-	//fmt.Printf("Host:%v\n", Host)
-	//fmt.Printf("NoDebug:%v\n", NoDebug)
-	//fmt.Printf("ClientTimeout:%v\n", ClientTimeout)
-	//fmt.Printf("TargetTimeout:%v\n", TargetTimeout)
-	//fmt.Printf("Proxy:%v\n", Proxy)
-	//fmt.Printf("Bound:%v\n", Bound)
+	file, err := os.ReadFile(ConfigPath)
+	if err != nil {
+		yaklog.Fatalf("Read Config Failed : %v", err)
+	}
+	// 解析 YAML 文件
+	if err = yaml.Unmarshal(file, &Config); err != nil {
+		yaklog.Fatalf("Unmarshal Config Failed : %v", err)
+	}
 }

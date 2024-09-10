@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"socks2https/setting"
+	"strings"
 )
 
 const (
@@ -41,7 +42,6 @@ type Context struct {
 	KeyExchangeAlgorithm   uint8
 	KeyDER                 *rsa.PrivateKey
 	CertDER                *x509.Certificate
-	Cache                  []byte
 	HandshakeMessages      [][]byte
 	MACLength              int
 	BlockLength            int
@@ -58,36 +58,26 @@ type Context struct {
 	ServerEncrypted        bool
 	ClientSeqNum           uint64
 	ServerSeqNum           uint64
-	VerifyFinished         bool
-	VerifyMAC              bool
-	Proxy                  string
 	HttpClient             *http.Client
 	Request                *http.Request
 	Response               *http.Response
-	DNSServer              string
 	ModifyRequestPiPeLine  []ModifyRequest
 	ModifyResponsePiPeLine []ModifyResponse
-	DefaultDomain          string
 }
 
 func NewContext(cipherSuite uint16) *Context {
 	ctx := &Context{
-		ContextId:      uuid.New().String()[:8],
-		Version:        tls.VersionTLS12,
-		CipherSuite:    cipherSuite,
-		ConfigPath:     "config",
-		VerifyMAC:      false,
-		VerifyFinished: true,
-		Proxy:          "http://127.0.0.1:8080",
-		DNSServer:      "114.114.114.114",
-		DefaultDomain:  "okii.com",
+		ContextId:   strings.ReplaceAll(uuid.New().String(), "-", "")[:16],
+		Version:     tls.VersionTLS12,
+		CipherSuite: cipherSuite,
+		ConfigPath:  "config",
 	}
 
 	ctx.HttpClient = &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
-				Timeout:   setting.TargetTimeout,
-				KeepAlive: setting.TargetTimeout,
+				Timeout:   setting.Config.Socks.TargetTimeout,
+				KeepAlive: setting.Config.Socks.TargetTimeout,
 			}).DialContext,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
@@ -96,8 +86,8 @@ func NewContext(cipherSuite uint16) *Context {
 		},
 	}
 
-	if ctx.Proxy != "" {
-		proxyURL, err := url.Parse(ctx.Proxy)
+	if setting.Config.HTTP.Proxy != "" {
+		proxyURL, err := url.Parse(setting.Config.HTTP.Proxy)
 		if err != nil {
 			yaklog.Fatalf("Proxy URL is Invalid : %v", err)
 		}

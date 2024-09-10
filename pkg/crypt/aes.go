@@ -5,7 +5,7 @@ import (
 	"crypto/cipher"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 )
 
 func PKCS7AESCBCEncrypt(plainText []byte, key, iv []byte) ([]byte, error) {
@@ -45,7 +45,7 @@ func AESCBCDecrypt(cipherText []byte, key, iv []byte) ([]byte, error) {
 	mode := cipher.NewCBCDecrypter(block, iv)
 	plainText := make([]byte, len(cipherText))
 	mode.CryptBlocks(plainText, cipherText)
-	//yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Padded Data Length : %d , Padded Data : %v", len(plainText), plainText)))
+	//yaklog.Debugf(color.SetColor(color.RED_COLOR_TYPE, fmt.Sprintf("Padded Data Length : %d , Padded Data : %v", len(plainText), plainText)))
 	return plainText, nil
 }
 
@@ -63,7 +63,7 @@ func PKCS7AESCBCDecrypt(cipherText []byte, key, iv []byte) ([]byte, error) {
 	mode := cipher.NewCBCDecrypter(block, iv)
 	plainText := make([]byte, len(cipherText))
 	mode.CryptBlocks(plainText, cipherText)
-	yaklog.Debugf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("Padded Data Length : %d , Padded Data : %v", len(plainText), plainText)))
+	yaklog.Debugf(color.SetColor(color.RED_COLOR_TYPE, fmt.Sprintf("Padded Data Length : %d , Padded Data : %v", len(plainText), plainText)))
 	unPadText, err := UnPad(plainText, block.BlockSize())
 	if err != nil {
 		return nil, err

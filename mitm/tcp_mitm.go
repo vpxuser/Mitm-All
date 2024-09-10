@@ -13,7 +13,7 @@ import (
 func TCPMITM(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
 	defer conn.Close()
 	addr := fmt.Sprintf("%s:%d", ctx.Host, ctx.Port)
-	dst, err := net.DialTimeout("tcp", addr, setting.TargetTimeout)
+	dst, err := net.DialTimeout("tcp", addr, setting.Config.Socks.TargetTimeout)
 	if err != nil {
 		return fmt.Errorf("Connect to [%s] Failed : %v", addr, err)
 	}

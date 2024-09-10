@@ -29,12 +29,11 @@ type MitmSocks struct {
 
 // Run 启动socks5代理服务器
 func Run() {
-	server, err := net.Listen(PROTOCOL_TCP, setting.Host)
+	server, err := net.Listen(PROTOCOL_TCP, setting.Config.Socks.Host)
 	if err != nil {
 		yaklog.Fatalf("Start SOCKS Server Failed : %v", err)
 	}
-	yaklog.Infof("Start SOCKS Server On [%s]", setting.Host)
-	//yaklog.Infof("connect to HTTP proxy [%s]", setting.Proxy)
+	yaklog.Infof("Start SOCKS Server On [%s]", setting.Config.Socks.Host)
 	for {
 		ctx := mitm.NewContext(mitm.TLS_RSA_WITH_AES_128_CBC_SHA)
 		ctx.LogTamplate = fmt.Sprintf("[clientId:%s]", ctx.ContextId)
@@ -48,7 +47,7 @@ func Run() {
 		ctx.Client2MitmLog = fmt.Sprintf("[clientId:%s] [%s => %s]", ctx.ContextId, client.RemoteAddr().String(), reg.FindString(client.LocalAddr().String()))
 		ctx.Mitm2ClientLog = fmt.Sprintf("[clientId:%s] [%s => %s]", ctx.ContextId, reg.FindString(client.LocalAddr().String()), client.RemoteAddr().String())
 		yaklog.Debugf("%s Accept Client Connection", ctx.LogTamplate)
-		if err = client.SetDeadline(time.Now().Add(setting.ClientTimeout)); err != nil {
+		if err = client.SetDeadline(time.Now().Add(setting.Config.Socks.ClientTimeout)); err != nil {
 			yaklog.Warnf("%s Set Client Deadline Failed : %v", ctx.LogTamplate, err)
 		}
 		go Handler(client, ctx)

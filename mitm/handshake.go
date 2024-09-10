@@ -3,7 +3,7 @@ package mitm
 import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 )
 
 // TLS 握手消息类型
@@ -78,7 +78,7 @@ func ParseHandshake(data []byte, ctx *Context) (*Handshake, error) {
 	case HandshakeTypeFinished:
 		handshake.Finished = data[4 : 4+handshake.Length]
 	default:
-		yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Handshake Type : %d", handshake.HandshakeType)))
+		yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Handshake Type : %d", handshake.HandshakeType)))
 	}
 	return handshake, nil
 }
@@ -97,7 +97,7 @@ func (h *Handshake) GetRaw() []byte {
 		case HandshakeTypeFinished:
 			return append(handshake, h.Payload...)
 		default:
-			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Handshake Type : %d", h.HandshakeType)))
+			yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Handshake Type : %d", h.HandshakeType)))
 		}
 	}
 	return append(handshake, h.Payload...)

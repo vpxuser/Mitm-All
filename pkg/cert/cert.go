@@ -9,12 +9,14 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"math/big"
+	"net/http"
 	"os"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 	"strings"
 	"time"
 )
 
+// todo 并发锁
 var (
 	CertificateDB = make(map[string]*x509.Certificate)
 	PrivateKeyDB  = make(map[string]*rsa.PrivateKey)
@@ -33,7 +35,7 @@ func init() {
 		}
 		caCertDER, err = CreateFakeRootCertificate("www.digicert.com", caKeyDER)
 		if err != nil {
-			yaklog.Fatalf(comm.SetColor(comm.RED_COLOR_TYPE, fmt.Sprintf("%v", err)))
+			yaklog.Fatalf(color.SetColor(color.RED_COLOR_TYPE, fmt.Sprintf("%v", err)))
 		} else if err = SaveCertificate("config", "ca", caCertDER); err != nil {
 			yaklog.Fatalf("save CA Certificate failed : %v", err)
 		}
@@ -45,7 +47,7 @@ func init() {
 }
 
 func CreateFakeRootCertificate(domain string, caKeyDER *rsa.PrivateKey) (*x509.Certificate, error) {
-	realCert, err := GetRealCertificate(domain)
+	realCert, err := GetRealCertificateWithTCP(domain)
 	if err != nil {
 		return nil, fmt.Errorf("get CA Certificate Tamplate failed : %v", err)
 	}
@@ -71,8 +73,8 @@ func CreateFakeRootCertificate(domain string, caKeyDER *rsa.PrivateKey) (*x509.C
 	return caCertDER, nil
 }
 
-// GetParentDomain 获取域名的上级域名
-func GetParentDomain(domain string) string {
+// GetPrimaryDomain 获取域名的上级域名
+func GetPrimaryDomain(domain string) string {
 	parts := strings.Split(domain, ".")
 	if len(parts) < 2 {
 		return ""
@@ -120,7 +122,7 @@ func LoadKey(path string) (*rsa.PrivateKey, error) {
 	return keyDER, nil
 }
 
-func GetRealCertificate(domain string) (*x509.Certificate, error) {
+func GetRealCertificateWithTCP(domain string) (*x509.Certificate, error) {
 	conn, err := tls.Dial("tcp", domain+":443", &tls.Config{
 		InsecureSkipVerify: true, // 忽略证书验证
 	})
@@ -137,30 +139,30 @@ func GetRealCertificate(domain string) (*x509.Certificate, error) {
 	return nil, fmt.Errorf("No Certificate Exist")
 }
 
-//func GetRealCertificate(domain string) (*x509.Certificate, error) {
-//	client := &http.Client{
-//		Transport: &http.Transport{
-//			TLSClientConfig: &tls.Config{
-//				InsecureSkipVerify: true, // 跳过证书验证，仅用于测试
-//			},
-//		},
-//	}
-//	url := fmt.Sprintf("https://%s", domain)
-//	yaklog.Debugf(comm.SetColor(comm.YELLOW_COLOR_TYPE, fmt.Sprintf("get Certificate from : %s", url)))
-//	resp, err := client.Get(url)
-//	if err != nil {
-//		return nil, fmt.Errorf("get Certificate Template failed : %v", err)
-//	}
-//	defer resp.Body.Close()
-//	tlsState := resp.TLS
-//	if tlsState == nil {
-//		return nil, fmt.Errorf("no TLS Connection")
-//	}
-//	if len(tlsState.PeerCertificates) > 0 {
-//		return tlsState.PeerCertificates[0], nil
-//	}
-//	return nil, fmt.Errorf("no Certificate exist")
-//}
+func GetRealCertificateWithHTTPS(domain string) (*x509.Certificate, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // 跳过证书验证，仅用于测试
+			},
+		},
+	}
+	url := fmt.Sprintf("https://%s", domain)
+	yaklog.Debugf(color.SetColor(color.YELLOW_COLOR_TYPE, fmt.Sprintf("get Certificate from : %s", url)))
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("get Certificate Template failed : %v", err)
+	}
+	defer resp.Body.Close()
+	tlsState := resp.TLS
+	if tlsState == nil {
+		return nil, fmt.Errorf("no TLS Connection")
+	}
+	if len(tlsState.PeerCertificates) > 0 {
+		return tlsState.PeerCertificates[0], nil
+	}
+	return nil, fmt.Errorf("no Certificate exist")
+}
 
 // CreateFakeCertificate 用于生成 MITM 证书的函数，传入 CA 证书、密钥和目标域名证书模板
 func CreateFakeCertificate(caCert *x509.Certificate, caKey *rsa.PrivateKey, realCert *x509.Certificate, key *rsa.PrivateKey) (*x509.Certificate, error) {
@@ -199,28 +201,26 @@ func IsWildcardCertificate(cert *x509.Certificate) bool {
 	return false
 }
 
-// todo
 func GetKey(path, domain string) (*rsa.PrivateKey, error) {
-	parentDomain := SubDomainDB[domain]
-	keyDER, ok := PrivateKeyDB[parentDomain]
+	primaryDomain := SubDomainDB[domain]
+	keyDER, ok := PrivateKeyDB[primaryDomain]
 	if ok {
 		return keyDER, nil
 	}
-	keyDER, err := LoadKey(fmt.Sprintf("%s/%s.key", path, parentDomain))
+	keyDER, err := LoadKey(fmt.Sprintf("%s/%s.key", path, primaryDomain))
 	if err == nil {
 		return keyDER, nil
 	}
 	return nil, fmt.Errorf("%s Fake Private Key not exist", domain)
 }
 
-// todo
 func GetCertificate(path, domain string) (*x509.Certificate, error) {
-	parentDomain := SubDomainDB[domain]
-	certDER, ok := CertificateDB[parentDomain]
+	primaryDomain := SubDomainDB[domain]
+	certDER, ok := CertificateDB[primaryDomain]
 	if ok {
 		return certDER, nil
 	}
-	certDER, err := LoadCert(fmt.Sprintf("%s/%s.crt", path, parentDomain))
+	certDER, err := LoadCert(fmt.Sprintf("%s/%s.crt", path, primaryDomain))
 	if err == nil {
 		return certDER, nil
 	}
@@ -262,17 +262,31 @@ func SaveCertificate(path, domain string, certDER *x509.Certificate) error {
 	return nil
 }
 
-// todo 通配符域名bug修复
 func GetCertificateAndKey(path, domain string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	fakeCert, notExist := GetCertificate(path, domain)
 	fakeKey, err := GetKey(path, domain)
 	if err == nil && notExist == nil {
 		return fakeCert, fakeKey, nil
 	}
-	realCert, err := GetRealCertificate(domain)
+
+	realCert, err := GetRealCertificateWithTCP(domain)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	primaryDomain := domain
+	if IsWildcardCertificate(realCert) {
+		primaryDomain = GetPrimaryDomain(domain)
+	}
+	SubDomainDB[domain] = primaryDomain
+
+	_, subOK := SubDomainDB[primaryDomain]
+	certDER, certOK := CertificateDB[primaryDomain]
+	keyDER, keyOK := PrivateKeyDB[primaryDomain]
+	if subOK && certOK && keyOK {
+		return certDER, keyDER, nil
+	}
+
 	fakeKey, err = rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create Fake Private Key failed : %v", err)
@@ -289,23 +303,12 @@ func GetCertificateAndKey(path, domain string) (*x509.Certificate, *rsa.PrivateK
 	if err != nil {
 		return nil, nil, err
 	}
-	if IsWildcardCertificate(realCert) {
-		parentDomain := GetParentDomain(domain)
-		SubDomainDB[domain] = parentDomain
-		if err = SaveCertificate(path, parentDomain, fakeCert); err != nil {
-			return nil, nil, err
-		}
-		if err = SaveFakeKey(path, parentDomain, fakeKey); err != nil {
-			return nil, nil, err
-		}
-	} else {
-		SubDomainDB[domain] = domain
-		if err = SaveCertificate(path, domain, fakeCert); err != nil {
-			return nil, nil, err
-		}
-		if err = SaveFakeKey(path, domain, fakeKey); err != nil {
-			return nil, nil, err
-		}
+
+	if err = SaveCertificate(path, primaryDomain, fakeCert); err != nil {
+		return nil, nil, err
+	}
+	if err = SaveFakeKey(path, primaryDomain, fakeKey); err != nil {
+		return nil, nil, err
 	}
 	return fakeCert, fakeKey, nil
 }

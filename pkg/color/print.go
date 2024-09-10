@@ -1,4 +1,4 @@
-package comm
+package color
 
 import (
 	"fmt"
@@ -36,28 +36,28 @@ var colorMap = map[int]func(arg any) aurora.Value{
 // SetColor 设置字符串颜色
 func SetColor(colorType int, payload any) string {
 	str := fmt.Sprintf("%v", payload)
-	if !setting.NoColor {
+	if setting.Config.Log.ColorSwitch {
 		str = fmt.Sprint(colorMap[colorType](payload))
 	}
 	return str
 }
 
 // DumpRequest 打印更美观的 request 信息
-func DumpRequest(req *http.Request, displayBody bool, colorType int) {
-	dump, err := httputil.DumpRequestOut(req, displayBody)
+func DumpRequest(req *http.Request, display bool, colorType int) {
+	dump, err := httputil.DumpRequestOut(req, display)
 	if err != nil {
-		yaklog.Errorf("dump request failed : %v", err)
+		yaklog.Errorf("Dump Request Failed : %v", err)
 		return
 	}
-	yaklog.Debugf("dump request : \n%s", SetColor(colorType, string(dump)))
+	yaklog.Debugf("Dump Request : \n%s", SetColor(colorType, string(dump)))
 }
 
 // DumpResponse 打印更美观的 response 信息
-func DumpResponse(resp *http.Response, displayBody bool, colorType int) {
-	dump, err := httputil.DumpResponse(resp, displayBody)
+func DumpResponse(resp *http.Response, display bool, colorType int) {
+	dump, err := httputil.DumpResponse(resp, display)
 	if err != nil {
-		yaklog.Errorf("dump response failed : %v", err)
+		yaklog.Errorf("Dump Response Failed : %v", err)
 		return
 	}
-	yaklog.Debugf("dump response : \n%s", SetColor(colorType, string(dump)))
+	yaklog.Debugf("Dump Response : \n%s", SetColor(colorType, string(dump)))
 }

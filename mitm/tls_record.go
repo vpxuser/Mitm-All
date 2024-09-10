@@ -6,8 +6,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 	"socks2https/pkg/crypt"
+	"socks2https/setting"
 )
 
 // TLS 常见消息类型
@@ -87,12 +88,12 @@ func ParseBlockRecord(blockRecord []byte, ctx *Context) (*Record, error) {
 	plainRecord := append(blockRecord[:3], append(length, fragment...)...)
 
 	// 校验MAC防篡改
-	if ctx.VerifyMAC {
+	if setting.Config.TLS.VerifyMAC {
 		seqNum := make([]byte, 8)
 		binary.BigEndian.PutUint64(seqNum, ctx.ClientSeqNum)
-		tamplate := fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, ContentType[plainRecord[0]]))
+		tamplate := fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, color.SetColor(color.YELLOW_COLOR_TYPE, ContentType[plainRecord[0]]))
 		if plainRecord[0] == ContentTypeHandshake {
-			tamplate = fmt.Sprintf("%s [%s]", tamplate, comm.SetColor(comm.RED_COLOR_TYPE, HandshakeType[plainRecord[5]]))
+			tamplate = fmt.Sprintf("%s [%s]", tamplate, color.SetColor(color.RED_COLOR_TYPE, HandshakeType[plainRecord[5]]))
 		}
 
 		// 服务端生成MAC
@@ -152,7 +153,7 @@ func ParseRecord(data []byte, ctx *Context) (*Record, error) {
 	case ContentTypeApplicationData:
 		record.ApplicationData = record.Fragment
 	default:
-		yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Content Type : %v", record.ContentType)))
+		yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Content Type : %v", record.ContentType)))
 	}
 	return record, nil
 }
@@ -225,7 +226,7 @@ func (r *Record) GetRaw() []byte {
 		case ContentTypeApplicationData:
 			return append(record, r.ApplicationData...)
 		default:
-			yaklog.Warnf(comm.SetColor(comm.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Content Type : %v", r.ContentType)))
+			yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, fmt.Sprintf("not support Content Type : %v", r.ContentType)))
 		}
 	}
 	return append(record, r.Fragment...)

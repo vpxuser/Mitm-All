@@ -6,7 +6,7 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
-	"socks2https/pkg/comm"
+	"socks2https/pkg/color"
 	"socks2https/pkg/crypt"
 )
 
@@ -54,7 +54,7 @@ func ParseClientKeyExchange(data []byte, ctx *Context) (ClientKeyExchange, error
 }
 
 var ReadClientKeyExchange = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
-	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, comm.SetColor(comm.YELLOW_COLOR_TYPE, "Handshake"), comm.SetColor(comm.RED_COLOR_TYPE, "Client Key Exchange"))
+	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Handshake"), color.SetColor(color.RED_COLOR_TYPE, "Client Key Exchange"))
 
 	record, err := FilterRecord(reader, ContentTypeHandshake, HandshakeTypeClientKeyExchange, ctx)
 	if err != nil {
