@@ -38,8 +38,8 @@ func (s *ServerHello) GetRaw() []byte {
 	return serverHello
 }
 
-func NewServerHello(ctx *Context) (*Record, error) {
-	serverHello := &ServerHello{Version: ctx.Version}
+func NewServerHello(version, cipherSuite uint16) (*Record, error) {
+	serverHello := &ServerHello{Version: version}
 	binary.BigEndian.PutUint32(serverHello.Random[0:4], uint32(time.Now().Unix()))
 	if _, err := rand.Read(serverHello.Random[4:]); err != nil {
 		return nil, fmt.Errorf("create Random failed : %v", err)
@@ -49,7 +49,7 @@ func NewServerHello(ctx *Context) (*Record, error) {
 	if _, err := rand.Read(serverHello.SessionID); err != nil {
 		return nil, fmt.Errorf("create SessionID failed : %v", err)
 	}
-	serverHello.CipherSuite = ctx.CipherSuite
+	serverHello.CipherSuite = cipherSuite
 	serverHello.CompressionMethod = 0
 	serverHello.ExtensionsLength = 0
 	serverHelloRaw := serverHello.GetRaw()
@@ -62,7 +62,7 @@ func NewServerHello(ctx *Context) (*Record, error) {
 	handshakeRaw := handshake.GetRaw()
 	return &Record{
 		ContentType: ContentTypeHandshake,
-		Version:     ctx.Version,
+		Version:     version,
 		Length:      uint16(len(handshakeRaw)),
 		Handshake:   *handshake,
 		Fragment:    handshakeRaw,
@@ -71,7 +71,7 @@ func NewServerHello(ctx *Context) (*Record, error) {
 
 var WriteServerHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
 	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Mitm2ClientLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Handshake"), color.SetColor(color.RED_COLOR_TYPE, "Server Hello"))
-	record, err := NewServerHello(ctx)
+	record, err := NewServerHello(ctx.Version, ctx.CipherSuite)
 	if err != nil {
 		return fmt.Errorf("%s %v", tamplate, err)
 	}

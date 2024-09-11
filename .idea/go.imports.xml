@@ -4,6 +4,7 @@
     <option name="excludedPackages">
       <array>
         <option value="gopkg.in/yaml.v2" />
+        <option value="gorm.io/gorm" />
       </array>
     </option>
   </component>

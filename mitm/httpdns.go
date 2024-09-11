@@ -3,11 +3,15 @@ package mitm
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	yaklog "github.com/yaklang/yaklang/common/log"
+	"gorm.io/gorm"
 	"io"
 	"net/http"
+	"socks2https/database"
 	"socks2https/pkg/color"
 	"socks2https/pkg/dnsutils"
+	"socks2https/services"
 	"socks2https/setting"
 )
 
@@ -18,19 +22,19 @@ var (
 )
 
 var DNSRequest = ModifyRequest(func(req *http.Request, ctx *Context) (*http.Request, *http.Response) {
-	if _, ok := Domain2IP[req.Host]; !ok {
+	if _, err := services.GetIPByDomain(database.Cache, req.Host); errors.Is(err, gorm.ErrRecordNotFound) {
 		ipv4s, err := dnsutils.DNS2IPv4(req.Host, setting.Config.DNS)
 		if err != nil {
 			yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, err))
 			return req, nil
 		}
 		for _, ipv4 := range ipv4s {
-			if _, ok = Domain2IP[req.Host][ipv4]; !ok {
-				Domain2IP[req.Host] = make(map[string]struct{})
-				Domain2IP[req.Host][ipv4] = struct{}{}
-				IP2Domain[ipv4] = append(IP2Domain[ipv4], req.Host)
+			if err = services.AddIPMapping(database.Cache, ipv4, req.Host); err != nil {
+				yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, err))
 			}
 		}
+	} else if err != nil {
+		yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, err))
 	}
 	return req, nil
 })
@@ -70,10 +74,9 @@ var HTTPDNSResponse = ModifyResponse(func(resp *http.Response, ctx *Context) *ht
 		}
 		for domain, ip := range baiduDNS.Data {
 			for _, ipv4 := range ip.IPv4.Ip {
-				if _, ok := Domain2IP[domain][ipv4]; !ok {
-					Domain2IP[domain] = make(map[string]struct{})
-					Domain2IP[domain][ipv4] = struct{}{}
-					IP2Domain[ipv4] = append(IP2Domain[ipv4], domain)
+				if err = services.AddIPMapping(database.Cache, ipv4, domain); err != nil {
+					yaklog.Warnf(color.SetColor(color.MAGENTA_COLOR_TYPE, err))
+					return resp
 				}
 			}
 		}

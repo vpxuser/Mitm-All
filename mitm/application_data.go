@@ -8,7 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"socks2https/pkg/cert"
+	"socks2https/pkg/certutils"
 	"socks2https/pkg/color"
 	"socks2https/pkg/httptools"
 )
@@ -44,7 +44,7 @@ var ReadApplicationData = HandleRecord(func(reader *bufio.Reader, conn net.Conn,
 	//yaklog.Infof("%s read TLS Record successfully", tamplate)
 
 	if ctx.Request.Host == "api.watch.okii.com" {
-		yaklog.Debugf(color.SetColor(color.RED_COLOR_TYPE, cert.CertificateDB["api.watch.okii.com"]))
+		yaklog.Debugf(color.SetColor(color.RED_COLOR_TYPE, certutils.CertificateDB["api.watch.okii.com"]))
 	}
 
 	// HTTP Request 报文篡改

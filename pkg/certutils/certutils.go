@@ -1,4 +1,4 @@
-package cert
+package certutils
 
 import (
 	"crypto/rand"
@@ -7,11 +7,9 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	yaklog "github.com/yaklang/yaklang/common/log"
 	"math/big"
 	"net/http"
 	"os"
-	"socks2https/pkg/color"
 	"strings"
 	"time"
 )
@@ -23,28 +21,28 @@ var (
 	SubDomainDB   = make(map[string]string)
 )
 
-func init() {
-	caCertDER, noExist := LoadCert("config/ca.crt")
-	caKeyDER, err := LoadKey("config/ca.key")
-	if err != nil || noExist != nil {
-		caKeyDER, err = rsa.GenerateKey(rand.Reader, 2048)
-		if err != nil {
-			yaklog.Fatalf("create CA Private Key failed : %v", err)
-		} else if err = SaveFakeKey("config", "ca", caKeyDER); err != nil {
-			yaklog.Fatalf("save CA Private Key failed : %v", err)
-		}
-		caCertDER, err = CreateFakeRootCertificate("www.digicert.com", caKeyDER)
-		if err != nil {
-			yaklog.Fatalf(color.SetColor(color.RED_COLOR_TYPE, fmt.Sprintf("%v", err)))
-		} else if err = SaveCertificate("config", "ca", caCertDER); err != nil {
-			yaklog.Fatalf("save CA Certificate failed : %v", err)
-		}
-	} else {
-		SubDomainDB["ca"] = "ca"
-		CertificateDB["ca"] = caCertDER
-		PrivateKeyDB["ca"] = caKeyDER
-	}
-}
+//func init() {
+//	caCertDER, noExist := LoadCert("config/ca.crt")
+//	caKeyDER, err := LoadKey("config/ca.key")
+//	if err != nil || noExist != nil {
+//		caKeyDER, err = rsa.GenerateKey(rand.Reader, 2048)
+//		if err != nil {
+//			yaklog.Fatalf("create CA Private Key failed : %v", err)
+//		} else if err = SaveFakeKey("config", "ca", caKeyDER); err != nil {
+//			yaklog.Fatalf("save CA Private Key failed : %v", err)
+//		}
+//		caCertDER, err = CreateFakeRootCertificate("www.digicert.com", caKeyDER)
+//		if err != nil {
+//			yaklog.Fatalf(color.SetColor(color.RED_COLOR_TYPE, fmt.Sprintf("%v", err)))
+//		} else if err = SaveCertificate("config", "ca", caCertDER); err != nil {
+//			yaklog.Fatalf("save CA Certificate failed : %v", err)
+//		}
+//	} else {
+//		SubDomainDB["ca"] = "ca"
+//		CertificateDB["ca"] = caCertDER
+//		PrivateKeyDB["ca"] = caKeyDER
+//	}
+//}
 
 func CreateFakeRootCertificate(domain string, caKeyDER *rsa.PrivateKey) (*x509.Certificate, error) {
 	realCert, err := GetRealCertificateWithTCP(domain)
@@ -148,7 +146,7 @@ func GetRealCertificateWithHTTPS(domain string) (*x509.Certificate, error) {
 		},
 	}
 	url := fmt.Sprintf("https://%s", domain)
-	yaklog.Debugf(color.SetColor(color.YELLOW_COLOR_TYPE, fmt.Sprintf("get Certificate from : %s", url)))
+	//yaklog.Debugf(color.SetColor(color.YELLOW_COLOR_TYPE, fmt.Sprintf("get Certificate from : %s", url)))
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("get Certificate Template failed : %v", err)
@@ -188,127 +186,127 @@ func CreateFakeCertificate(caCert *x509.Certificate, caKey *rsa.PrivateKey, real
 	return cert, nil
 }
 
-// IsWildcardCertificate 判断证书是否为通配符证书
-func IsWildcardCertificate(cert *x509.Certificate) bool {
-	if len(cert.Subject.CommonName) > 0 && cert.Subject.CommonName[0] == '*' {
-		return true
-	}
-	for _, san := range cert.DNSNames {
-		if len(san) > 0 && san[0] == '*' {
-			return true
-		}
-	}
-	return false
-}
-
-func GetKey(path, domain string) (*rsa.PrivateKey, error) {
-	primaryDomain := SubDomainDB[domain]
-	keyDER, ok := PrivateKeyDB[primaryDomain]
-	if ok {
-		return keyDER, nil
-	}
-	keyDER, err := LoadKey(fmt.Sprintf("%s/%s.key", path, primaryDomain))
-	if err == nil {
-		return keyDER, nil
-	}
-	return nil, fmt.Errorf("%s Fake Private Key not exist", domain)
-}
-
-func GetCertificate(path, domain string) (*x509.Certificate, error) {
-	primaryDomain := SubDomainDB[domain]
-	certDER, ok := CertificateDB[primaryDomain]
-	if ok {
-		return certDER, nil
-	}
-	certDER, err := LoadCert(fmt.Sprintf("%s/%s.crt", path, primaryDomain))
-	if err == nil {
-		return certDER, nil
-	}
-	return nil, fmt.Errorf("%s Fake Certificate not exist", domain)
-}
-
-func SaveFakeKey(path, domain string, keyDER *rsa.PrivateKey) error {
-	PrivateKeyDB[domain] = keyDER
-	block := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(keyDER),
-	}
-	keyPEM, err := os.Create(fmt.Sprintf("%s/%s.key", path, domain))
-	if err != nil && !os.IsExist(err) && domain != "ca" {
-		return fmt.Errorf("create Private Key PEM file failed : %v", err)
-	}
-	defer keyPEM.Close()
-	if err = pem.Encode(keyPEM, block); err != nil {
-		return fmt.Errorf("write Private Key PEM to file failed : %v", err)
-	}
-	return nil
-}
-
-func SaveCertificate(path, domain string, certDER *x509.Certificate) error {
-	CertificateDB[domain] = certDER
-	block := &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: certDER.Raw,
-	}
-	certPEM, err := os.Create(fmt.Sprintf("%s/%s.crt", path, domain))
-	if err != nil && !os.IsExist(err) && domain != "ca" {
-		return fmt.Errorf("create Fake Certificate PEM file failed : %v", err)
-	}
-	defer certPEM.Close()
-	err = pem.Encode(certPEM, block)
-	if err != nil {
-		return fmt.Errorf("write Fake Certificate PEM to file failed : %v", err)
-	}
-	return nil
-}
-
-func GetCertificateAndKey(path, domain string) (*x509.Certificate, *rsa.PrivateKey, error) {
-	fakeCert, notExist := GetCertificate(path, domain)
-	fakeKey, err := GetKey(path, domain)
-	if err == nil && notExist == nil {
-		return fakeCert, fakeKey, nil
-	}
-
-	realCert, err := GetRealCertificateWithTCP(domain)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	primaryDomain := domain
-	if IsWildcardCertificate(realCert) {
-		primaryDomain = GetPrimaryDomain(domain)
-	}
-	SubDomainDB[domain] = primaryDomain
-
-	_, subOK := SubDomainDB[primaryDomain]
-	certDER, certOK := CertificateDB[primaryDomain]
-	keyDER, keyOK := PrivateKeyDB[primaryDomain]
-	if subOK && certOK && keyOK {
-		return certDER, keyDER, nil
-	}
-
-	fakeKey, err = rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, nil, fmt.Errorf("create Fake Private Key failed : %v", err)
-	}
-	caCert, err := GetCertificate(path, "ca")
-	if err != nil {
-		return nil, nil, err
-	}
-	caKey, err := GetKey(path, "ca")
-	if err != nil {
-		return nil, nil, err
-	}
-	fakeCert, err = CreateFakeCertificate(caCert, caKey, realCert, fakeKey)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if err = SaveCertificate(path, primaryDomain, fakeCert); err != nil {
-		return nil, nil, err
-	}
-	if err = SaveFakeKey(path, primaryDomain, fakeKey); err != nil {
-		return nil, nil, err
-	}
-	return fakeCert, fakeKey, nil
-}
+//// IsWildcardCertificate 判断证书是否为通配符证书
+//func IsWildcardCertificate(cert *x509.Certificate) bool {
+//	if len(cert.Subject.CommonName) > 0 && cert.Subject.CommonName[0] == '*' {
+//		return true
+//	}
+//	for _, san := range cert.DNSNames {
+//		if len(san) > 0 && san[0] == '*' {
+//			return true
+//		}
+//	}
+//	return false
+//}
+//
+//func GetKey(path, domain string) (*rsa.PrivateKey, error) {
+//	primaryDomain := SubDomainDB[domain]
+//	keyDER, ok := PrivateKeyDB[primaryDomain]
+//	if ok {
+//		return keyDER, nil
+//	}
+//	keyDER, err := LoadKey(fmt.Sprintf("%s/%s.key", path, primaryDomain))
+//	if err == nil {
+//		return keyDER, nil
+//	}
+//	return nil, fmt.Errorf("%s Fake Private Key not exist", domain)
+//}
+//
+//func GetCertificate(path, domain string) (*x509.Certificate, error) {
+//	primaryDomain := SubDomainDB[domain]
+//	certDER, ok := CertificateDB[primaryDomain]
+//	if ok {
+//		return certDER, nil
+//	}
+//	certDER, err := LoadCert(fmt.Sprintf("%s/%s.crt", path, primaryDomain))
+//	if err == nil {
+//		return certDER, nil
+//	}
+//	return nil, fmt.Errorf("%s Fake Certificate not exist", domain)
+//}
+//
+//func SaveFakeKey(path, domain string, keyDER *rsa.PrivateKey) error {
+//	PrivateKeyDB[domain] = keyDER
+//	block := &pem.Block{
+//		Type:  "RSA PRIVATE KEY",
+//		Bytes: x509.MarshalPKCS1PrivateKey(keyDER),
+//	}
+//	keyPEM, err := os.Create(fmt.Sprintf("%s/%s.key", path, domain))
+//	if err != nil && !os.IsExist(err) && domain != "ca" {
+//		return fmt.Errorf("create Private Key PEM file failed : %v", err)
+//	}
+//	defer keyPEM.Close()
+//	if err = pem.Encode(keyPEM, block); err != nil {
+//		return fmt.Errorf("write Private Key PEM to file failed : %v", err)
+//	}
+//	return nil
+//}
+//
+//func SaveCertificate(path, domain string, certDER *x509.Certificate) error {
+//	CertificateDB[domain] = certDER
+//	block := &pem.Block{
+//		Type:  "CERTIFICATE",
+//		Bytes: certDER.Raw,
+//	}
+//	certPEM, err := os.Create(fmt.Sprintf("%s/%s.crt", path, domain))
+//	if err != nil && !os.IsExist(err) && domain != "ca" {
+//		return fmt.Errorf("create Fake Certificate PEM file failed : %v", err)
+//	}
+//	defer certPEM.Close()
+//	err = pem.Encode(certPEM, block)
+//	if err != nil {
+//		return fmt.Errorf("write Fake Certificate PEM to file failed : %v", err)
+//	}
+//	return nil
+//}
+//
+//func GetCertificateAndKey(path, domain string) (*x509.Certificate, *rsa.PrivateKey, error) {
+//	fakeCert, notExist := GetCertificate(path, domain)
+//	fakeKey, err := GetKey(path, domain)
+//	if err == nil && notExist == nil {
+//		return fakeCert, fakeKey, nil
+//	}
+//
+//	realCert, err := GetRealCertificateWithTCP(domain)
+//	if err != nil {
+//		return nil, nil, err
+//	}
+//
+//	primaryDomain := domain
+//	if IsWildcardCertificate(realCert) {
+//		primaryDomain = GetPrimaryDomain(domain)
+//	}
+//	SubDomainDB[domain] = primaryDomain
+//
+//	_, subOK := SubDomainDB[primaryDomain]
+//	certDER, certOK := CertificateDB[primaryDomain]
+//	keyDER, keyOK := PrivateKeyDB[primaryDomain]
+//	if subOK && certOK && keyOK {
+//		return certDER, keyDER, nil
+//	}
+//
+//	fakeKey, err = rsa.GenerateKey(rand.Reader, 2048)
+//	if err != nil {
+//		return nil, nil, fmt.Errorf("create Fake Private Key failed : %v", err)
+//	}
+//	caCert, err := GetCertificate(path, "ca")
+//	if err != nil {
+//		return nil, nil, err
+//	}
+//	caKey, err := GetKey(path, "ca")
+//	if err != nil {
+//		return nil, nil, err
+//	}
+//	fakeCert, err = CreateFakeCertificate(caCert, caKey, realCert, fakeKey)
+//	if err != nil {
+//		return nil, nil, err
+//	}
+//
+//	if err = SaveCertificate(path, primaryDomain, fakeCert); err != nil {
+//		return nil, nil, err
+//	}
+//	if err = SaveFakeKey(path, primaryDomain, fakeKey); err != nil {
+//		return nil, nil, err
+//	}
+//	return fakeCert, fakeKey, nil
+//}

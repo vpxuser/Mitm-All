@@ -6,7 +6,9 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
+	"socks2https/database"
 	"socks2https/pkg/color"
+	"socks2https/services"
 	"socks2https/setting"
 )
 
@@ -67,7 +69,7 @@ var ReadClientHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx
 	}
 	ctx.HandshakeMessages = append(ctx.HandshakeMessages, record.Fragment)
 	clientHello := record.Handshake.ClientHello
-	ctx.ClientRandom = record.Handshake.ClientHello.Random
+	ctx.ClientRandom = clientHello.Random
 	for _, cipherSuite := range clientHello.CipherSuites {
 		if cipherSuite != ctx.CipherSuite {
 			continue
@@ -80,14 +82,15 @@ var ReadClientHello = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx
 			yaklog.Infof("%s Domain : %s", tamplate, ctx.Domain)
 			return nil
 		}
-		if domains, ok := IP2Domain[ctx.Host]; ok {
-			ctx.Domain = domains[0]
-			yaklog.Infof("%s Parse CDN IP %s to Domain %s", tamplate, ctx.Host, ctx.Domain)
+		domain, err := services.GetDomainByIP(database.Cache, ctx.Host)
+		if err == nil {
+			ctx.Domain = domain
+			yaklog.Infof("%s Parse CDN IP %s to Domain %s", tamplate, ctx.Host, domain)
 			return nil
 		}
 		ctx.Domain = setting.Config.TLS.DefaultSNI
 		yaklog.Infof("%s Use Default Domain : %s", tamplate, ctx.Domain)
 		return nil
 	}
-	return fmt.Errorf("%s not support Cipher Suites", tamplate)
+	return fmt.Errorf("%s Not Support Cipher Suites", tamplate)
 })

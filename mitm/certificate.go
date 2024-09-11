@@ -2,11 +2,20 @@ package mitm
 
 import (
 	"bufio"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
+	"gorm.io/gorm"
 	"net"
-	"socks2https/pkg/cert"
+	"socks2https/database"
+	"socks2https/pkg/certutils"
 	"socks2https/pkg/color"
+	"socks2https/services"
+	"socks2https/setting"
+	"strings"
 )
 
 type Certificate struct {
@@ -17,21 +26,15 @@ type Certificate struct {
 	} `json:"certificates,omitempty"`
 }
 
-func NewCertificate(path string, ctx *Context) (*Record, error) {
-	certDER, keyDER, err := cert.GetCertificateAndKey(path, ctx.Domain)
-	if err != nil {
-		return nil, err
-	}
-	ctx.CertDER, ctx.KeyDER = certDER, keyDER
-	certificate := &Certificate{
-		CertificatesLength: uint32(3 + len(certDER.Raw)),
-		Certificates: []struct {
+func NewCertificate(version uint16, certDERs []*x509.Certificate) (*Record, error) {
+	certificate := &Certificate{}
+	for _, certDER := range certDERs {
+		certificateLength := uint32(len(certDER.Raw))
+		certificate.CertificatesLength += 3 + certificateLength
+		certificate.Certificates = append(certificate.Certificates, struct {
 			CertificateLength uint32
 			Certificate       []byte
-		}{{
-			CertificateLength: uint32(len(certDER.Raw)),
-			Certificate:       certDER.Raw,
-		}},
+		}{CertificateLength: certificateLength, Certificate: certDER.Raw})
 	}
 	certificateRaw := certificate.GetRaw()
 	handshake := &Handshake{
@@ -43,7 +46,7 @@ func NewCertificate(path string, ctx *Context) (*Record, error) {
 	handshakeRaw := handshake.GetRaw()
 	return &Record{
 		ContentType: ContentTypeHandshake,
-		Version:     ctx.Version,
+		Version:     version,
 		Length:      uint16(len(handshakeRaw)),
 		Handshake:   *handshake,
 		Fragment:    handshakeRaw,
@@ -86,7 +89,58 @@ func (c *Certificate) GetRaw() []byte {
 
 var WriteCertificate = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ctx *Context) error {
 	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Mitm2ClientLog, color.SetColor(color.YELLOW_COLOR_TYPE, "Handshake"), color.SetColor(color.RED_COLOR_TYPE, "Certificate"))
-	record, err := NewCertificate(ctx.ConfigPath, ctx)
+	var realCert *x509.Certificate
+	wildcardDomain, err := services.GetWildcardDomain(database.DB, ctx.Domain)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		realCert, err = certutils.GetRealCertificateWithTCP(ctx.Domain)
+		if err != nil {
+			return err
+		}
+		wildcardDomain = ctx.Domain
+		// 提取 CN 字段中的通配符域名
+		if strings.HasPrefix(realCert.Subject.CommonName, "*.") {
+			wildcardDomain = realCert.Subject.CommonName
+		} else {
+			// 提取 SAN 扩展中的 DNS 名称
+			for _, dnsName := range realCert.DNSNames {
+				if strings.HasPrefix(dnsName, "*.") {
+					wildcardDomain = dnsName
+					break
+				}
+			}
+		}
+		if err = services.AddDomainMapping(database.DB, ctx.Domain, wildcardDomain); err != nil {
+			return fmt.Errorf("Creating Domain Mapping Failed : %v", err)
+		}
+	} else if err != nil {
+		return err
+	}
+
+	ctx.CertDER, ctx.KeyDER, err = services.GetCertAndKey(database.DB, wildcardDomain)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		if realCert == nil {
+			realCert, err = certutils.GetRealCertificateWithTCP(ctx.Domain)
+			if err != nil {
+				return err
+			}
+		}
+
+		ctx.KeyDER, err = rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			return fmt.Errorf("Creating Fake Private Key Failed : %v", err)
+		}
+		ctx.CertDER, err = certutils.CreateFakeCertificate(setting.CACert, setting.CAKey, realCert, ctx.KeyDER)
+		if err != nil {
+			return err
+		}
+		if err := services.AddCertMapping(database.DB, wildcardDomain, ctx.CertDER, ctx.KeyDER); err != nil {
+			return fmt.Errorf("Creating Cert Mapping Failed : %v", err)
+		}
+	} else if err != nil {
+		return err
+	}
+
+	record, err := NewCertificate(ctx.Version, []*x509.Certificate{ctx.CertDER})
 	if err != nil {
 		return fmt.Errorf("%s %v", tamplate, err)
 	}
@@ -94,6 +148,6 @@ var WriteCertificate = HandleRecord(func(reader *bufio.Reader, conn net.Conn, ct
 	if _, err = conn.Write(record.GetRaw()); err != nil {
 		return fmt.Errorf("%s Write Certificate Failed : %v", tamplate, err)
 	}
-	yaklog.Infof("%s Write Certificate Successfully", tamplate)
+	yaklog.Infof("%s Write Certificate Successfully.", tamplate)
 	return nil
 })
