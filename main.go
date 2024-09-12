@@ -15,5 +15,12 @@ func init() {
 }
 
 func main() {
-	socks.Run()
+	mitmSocks := socks.MITMSocks{
+		Host:          setting.Config.Socks.Host,
+		Proxy:         setting.Config.HTTP.Proxy,
+		ClientTimeout: setting.Config.Socks.Timeout.Client,
+		TargetTimeout: setting.Config.Socks.Timeout.Target,
+		DefaultSNI:    setting.Config.TLS.DefaultSNI,
+	}
+	mitmSocks.Run()
 }

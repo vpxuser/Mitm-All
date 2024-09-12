@@ -4,8 +4,9 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
-	"socks2https/mitm"
-	"socks2https/pkg/color"
+	"regexp"
+	"socks2https/context"
+	"socks2https/pkg/colorutils"
 	"socks2https/setting"
 )
 
@@ -35,7 +36,7 @@ const (
 	ADDRESS_TYPE_NOT_SUPPORTED_REP   byte = 0x08
 )
 
-func Runcmd(conn net.Conn, ctx *mitm.Context) error {
+func Runcmd(conn net.Conn, ctx *context.Context) error {
 	// 客户端请求包
 	// +-----+-----+-------+------+----------+----------+
 	// | VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
@@ -114,7 +115,11 @@ func Runcmd(conn net.Conn, ctx *mitm.Context) error {
 	port := (uint16(buf[0]) << 8) + uint16(buf[1])
 	ctx.Port = port
 	addr := fmt.Sprintf("%s:%d", host, port)
-	yaklog.Infof("%s Target Address : %s", ctx.LogTamplate, color.SetColor(color.GREEN_COLOR_TYPE, addr))
+	yaklog.Infof("%s Get Target Address : %s", ctx.LogTamplate, addr)
+
+	reg := regexp.MustCompile(`:\d+$`)
+	ctx.Mitm2TargetLog = fmt.Sprintf("[clientId:%s] [%s => %s] [%s]", ctx.ContextId, reg.FindString(conn.LocalAddr().String()), addr, colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "TCP"))
+	ctx.Target2MitmLog = fmt.Sprintf("[clientId:%s] [%s => %s] [%s]", ctx.ContextId, addr, reg.FindString(conn.LocalAddr().String()), colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "TCP"))
 	// 服务端响应包
 	// +-----+-----+-------+------+----------+----------+
 	// | VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |

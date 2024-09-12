@@ -33,7 +33,7 @@ var (
 //		}
 //		caCertDER, err = CreateFakeRootCertificate("www.digicert.com", caKeyDER)
 //		if err != nil {
-//			yaklog.Fatalf(color.SetColor(color.RED_COLOR_TYPE, fmt.Sprintf("%v", err)))
+//			yaklog.Fatalf(colorutils.SetColor(colorutils.RED_COLOR_TYPE, fmt.Sprintf("%v", err)))
 //		} else if err = SaveCertificate("config", "ca", caCertDER); err != nil {
 //			yaklog.Fatalf("save CA Certificate failed : %v", err)
 //		}
@@ -146,7 +146,7 @@ func GetRealCertificateWithHTTPS(domain string) (*x509.Certificate, error) {
 		},
 	}
 	url := fmt.Sprintf("https://%s", domain)
-	//yaklog.Debugf(color.SetColor(color.YELLOW_COLOR_TYPE, fmt.Sprintf("get Certificate from : %s", url)))
+	//yaklog.Debugf(colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, fmt.Sprintf("get Certificate from : %s", url)))
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("get Certificate Template failed : %v", err)

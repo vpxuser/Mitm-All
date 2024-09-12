@@ -5,8 +5,8 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
-	"socks2https/mitm"
-	"socks2https/pkg/color"
+	"socks2https/context"
+	"socks2https/pkg/colorutils"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 
 // socks握手处理函数
 // 暂时只支持 未授权访问 方法
-func Handshake(conn net.Conn, ctx *mitm.Context) error {
+func Handshake(conn net.Conn, ctx *context.Context) error {
 	// 客户端请求包
 	// +----+----------+----------+
 	// |VER | NMETHODS | METHODS  |
@@ -63,7 +63,7 @@ func Handshake(conn net.Conn, ctx *mitm.Context) error {
 			method = NO_ACCEPTABLE_METHOD
 		}
 	}
-	yaklog.Debugf("%s Receive Client SOCKS Handshake : %s", ctx.LogTamplate, color.SetColor(color.GREEN_COLOR_TYPE, fmt.Sprintf("%v", append(buf, methods...))))
+	yaklog.Debugf("%s Receive Client SOCKS Handshake : %s", ctx.LogTamplate, colorutils.SetColor(colorutils.GREEN_COLOR_TYPE, fmt.Sprintf("%v", append(buf, methods...))))
 	// 服务端响应包
 	// +----+--------+
 	// |VER | METHOD |
@@ -87,7 +87,7 @@ func Handshake(conn net.Conn, ctx *mitm.Context) error {
 //	| 1  |  1   | 1 to 255 |  1   | 1 to 255 |
 //	+----+------+----------+------+----------+
 
-func parseUnamePasswd(reader *bufio.Reader, ctx *mitm.Context) (byte, error) {
+func parseUnamePasswd(reader *bufio.Reader, ctx *context.Context) (byte, error) {
 	buf := make([]byte, 2)
 	if _, err := reader.Read(buf); err != nil {
 		return FAIL_AUTHENTICATION, fmt.Errorf("%s read VER and ULEN failed : %v", ctx.LogTamplate, err)
@@ -122,7 +122,7 @@ func parseUnamePasswd(reader *bufio.Reader, ctx *mitm.Context) (byte, error) {
 // | 1  |   1    |
 // +----+--------+
 
-func replyUnamePass(status byte, conn net.Conn, ctx *mitm.Context) error {
+func replyUnamePass(status byte, conn net.Conn, ctx *context.Context) error {
 	buf := []byte{AUTHENTICATION_VERSION, status}
 	yaklog.Debugf("%s send auth response : %v", ctx.LogTamplate, buf)
 	if _, err := conn.Write(buf); err != nil {

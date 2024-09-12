@@ -1,20 +1,29 @@
 log:
   colorSwitch: true
-  level: 5
+  level: 4
 socks:
   host: 0.0.0.0:1080
-  clientTimeout: 60s
-  targetTimeout: 60s
+  timeout:
+    switch: false
+    client: 60s
+    target: 60s
   bound: false
+  mitmSwitch: true
 tls:
-  verifyFinished: true
+  mitmSwitch: true
+  verifyFinished: false
   verifyMAC: false
   defaultSNI: okii.com
 http:
+  mitmSwitch: true
   proxy: http://127.0.0.1:8080
 dns: 114.114.114.114
 ca:
   cert: config/ca/ca.crt
   key: config/ca/ca.key
 db:
-  path: migrations/sqlite.db
+  ram:
+    logSwitch: false
+  disk:
+    logSwitch: false
+    path: config/sqlite/mitm.db

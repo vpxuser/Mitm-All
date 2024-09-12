@@ -1,11 +1,15 @@
 package socks
 
 import (
+	"crypto/tls"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
+	"net/http"
+	"net/url"
 	"regexp"
-	"socks2https/mitm"
+	"socks2https/context"
+	"socks2https/pkg/colorutils"
 	"socks2https/setting"
 	"time"
 )
@@ -15,41 +19,63 @@ const (
 	PROTOCOL_HTTP = "http"
 )
 
-type MitmSocks struct {
-	Tag   string
-	Host  string
-	Port  uint16
-	Proxy struct {
-		Host string
-		Port uint16
-	}
-	Cert string
-	Key  string
+type MITMSocks struct {
+	Host          string
+	Proxy         string
+	ClientTimeout time.Duration
+	TargetTimeout time.Duration
+	DefaultSNI    string
 }
 
-// Run 启动socks5代理服务器
-func Run() {
-	server, err := net.Listen(PROTOCOL_TCP, setting.Config.Socks.Host)
+func (m *MITMSocks) Run() {
+	server, err := net.Listen(PROTOCOL_TCP, m.Host)
 	if err != nil {
 		yaklog.Fatalf("Start SOCKS Server Failed : %v", err)
 	}
-	yaklog.Infof("Start SOCKS Server On [%s]", setting.Config.Socks.Host)
+	yaklog.Infof("Start SOCKS Server On [%s]", m.Host)
+
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   m.TargetTimeout,
+			KeepAlive: m.TargetTimeout,
+		}).DialContext,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+		ForceAttemptHTTP2: false,
+	}
+
+	if m.Proxy != "" {
+		proxyURL, err := url.Parse(m.Proxy)
+		if err != nil {
+			yaklog.Fatalf("Proxy URL is Invalid : %v", err)
+		}
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
+
 	for {
-		ctx := mitm.NewContext(mitm.TLS_RSA_WITH_AES_128_CBC_SHA)
+		ctx := context.NewContext(tls.TLS_RSA_WITH_AES_128_CBC_SHA, m.DefaultSNI, transport)
 		ctx.LogTamplate = fmt.Sprintf("[clientId:%s]", ctx.ContextId)
+
 		client, err := server.Accept()
 		if err != nil {
 			yaklog.Errorf("%s Accept Client Connection Failed : %v", ctx.LogTamplate, err)
 			continue
 		}
-		ctx.LogTamplate = fmt.Sprintf("%s [clientIP:%s]", ctx.LogTamplate, client.RemoteAddr().String())
+
+		ctx.LogTamplate = fmt.Sprintf("%s [clientIP:%s] [%s]", ctx.LogTamplate, client.RemoteAddr().String(), colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "TCP"))
 		reg := regexp.MustCompile(`:\d+$`)
 		ctx.Client2MitmLog = fmt.Sprintf("[clientId:%s] [%s => %s]", ctx.ContextId, client.RemoteAddr().String(), reg.FindString(client.LocalAddr().String()))
 		ctx.Mitm2ClientLog = fmt.Sprintf("[clientId:%s] [%s => %s]", ctx.ContextId, reg.FindString(client.LocalAddr().String()), client.RemoteAddr().String())
-		yaklog.Debugf("%s Accept Client Connection", ctx.LogTamplate)
-		if err = client.SetDeadline(time.Now().Add(setting.Config.Socks.ClientTimeout)); err != nil {
-			yaklog.Warnf("%s Set Client Deadline Failed : %v", ctx.LogTamplate, err)
+
+		yaklog.Infof("%s New Client Connection Successfully Established", ctx.LogTamplate)
+
+		if setting.Config.Socks.Timeout.Switch {
+			if err = client.SetDeadline(time.Now().Add(m.ClientTimeout)); err != nil {
+				yaklog.Warnf("%s Set Client Deadline Failed : %v", ctx.LogTamplate, err)
+			}
 		}
+
 		go Handler(client, ctx)
 	}
 }

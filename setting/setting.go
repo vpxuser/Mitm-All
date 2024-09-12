@@ -37,20 +37,28 @@ type Log struct {
 }
 
 type Socks struct {
-	Host          string        `yaml:"host"`
-	ClientTimeout time.Duration `yaml:"clientTimeout"`
-	TargetTimeout time.Duration `yaml:"targetTimeout"`
-	Bound         bool          `yaml:"bound"`
+	Host       string  `yaml:"host"`
+	Timeout    Timeout `yaml:"timeout"`
+	Bound      bool    `yaml:"bound"`
+	MITMSwitch bool    `yaml:"mitmSwitch"`
+}
+
+type Timeout struct {
+	Switch bool          `yaml:"switch"`
+	Client time.Duration `yaml:"client"`
+	Target time.Duration `yaml:"target"`
 }
 
 type TLS struct {
+	MITMSwitch     bool   `yaml:"mitmSwitch"`
 	VerifyFinished bool   `yaml:"verifyFinished"`
 	VerifyMAC      bool   `yaml:"verifyMAC"`
 	DefaultSNI     string `yaml:"defaultSNI"`
 }
 
 type HTTP struct {
-	Proxy string `yaml:"proxy"`
+	MITMSwitch bool   `yaml:"mitmSwitch"`
+	Proxy      string `yaml:"proxy"`
 }
 
 type CA struct {
@@ -59,7 +67,17 @@ type CA struct {
 }
 
 type DB struct {
-	Path string `yaml:"path"`
+	RAM  RAM  `yaml:"ram"`
+	Disk Disk `yaml:"disk"`
+}
+
+type RAM struct {
+	LogSwitch bool `yaml:"logSwitch"`
+}
+
+type Disk struct {
+	LogSwitch bool   `yaml:"logSwitch"`
+	Path      string `yaml:"path"`
 }
 
 func init() {
@@ -79,4 +97,5 @@ func init() {
 	if err != nil {
 		yaklog.Fatal(err)
 	}
+	yaklog.Info("Loading Configure Successfully.")
 }
