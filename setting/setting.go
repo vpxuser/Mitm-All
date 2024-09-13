@@ -1,6 +1,7 @@
 package setting
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"github.com/kataras/golog"
@@ -41,12 +42,18 @@ type Socks struct {
 	Timeout    Timeout `yaml:"timeout"`
 	Bound      bool    `yaml:"bound"`
 	MITMSwitch bool    `yaml:"mitmSwitch"`
+	Dump       Dump    `yaml:"dump"`
 }
 
 type Timeout struct {
 	Switch bool          `yaml:"switch"`
 	Client time.Duration `yaml:"client"`
 	Target time.Duration `yaml:"target"`
+}
+
+type Dump struct {
+	Switch bool   `yaml:"switch"`
+	Port   uint16 `yaml:"port"`
 }
 
 type TLS struct {
@@ -62,8 +69,9 @@ type HTTP struct {
 }
 
 type CA struct {
-	Cert string `yaml:"cert"`
-	Key  string `yaml:"key"`
+	Domain string `yaml:"domain"`
+	Cert   string `yaml:"cert"`
+	Key    string `yaml:"key"`
 }
 
 type DB struct {
@@ -85,17 +93,43 @@ func init() {
 	if err != nil {
 		yaklog.Fatalf("Read Config Failed : %v", err)
 	}
-	// 解析 YAML 文件
+
 	if err = yaml.Unmarshal(file, &Config); err != nil {
 		yaklog.Fatalf("Unmarshal Config Failed : %v", err)
 	}
-	CACert, err = certutils.LoadCert(Config.CA.Cert)
-	if err != nil {
-		yaklog.Fatal(err)
-	}
-	CAKey, err = certutils.LoadKey(Config.CA.Key)
-	if err != nil {
-		yaklog.Fatal(err)
-	}
+
 	yaklog.Info("Loading Configure Successfully.")
+
+	CACert, CAKey, err = InitCertificateAndPrivateKey()
+	if err != nil {
+		yaklog.Fatal(err)
+	}
+
+	yaklog.Info("Loading Root CA Certificate and PrivateKey Successfully.")
+}
+
+func InitCertificateAndPrivateKey() (*x509.Certificate, *rsa.PrivateKey, error) {
+	cert, certErr := certutils.LoadCert(Config.CA.Cert)
+	key, keyErr := certutils.LoadKey(Config.CA.Key)
+	if certErr != nil || keyErr != nil {
+		key, keyErr = rsa.GenerateKey(rand.Reader, 2048)
+		if keyErr != nil {
+			return nil, nil, keyErr
+		}
+		defer certutils.SaveKey(Config.CA.Key, key)
+
+		realCert, err := certutils.GetRealCertificateWithTCP(Config.CA.Domain)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		cert, certErr = certutils.ForgedRootCACertificate(realCert, key)
+		if certErr != nil {
+			return nil, nil, certErr
+		}
+		defer certutils.SaveCertificate(Config.CA.Cert, cert)
+
+		return cert, key, nil
+	}
+	return cert, key, nil
 }

@@ -9,6 +9,9 @@ socks:
     target: 60s
   bound: false
   mitmSwitch: true
+  dump:
+    switch: false
+    port: 8000
 tls:
   mitmSwitch: true
   verifyFinished: false
@@ -19,6 +22,7 @@ http:
   proxy: http://127.0.0.1:8080
 dns: 114.114.114.114
 ca:
+  domain: www.digicert.com
   cert: config/ca/ca.crt
   key: config/ca/ca.key
 db:
@@ -26,4 +30,4 @@ db:
     logSwitch: false
   disk:
     logSwitch: false
-    path: config/sqlite/mitm.db
+    path: config/sqlite/main.db

@@ -1,0 +1,1 @@
+go build -o socks2https.exe main.go

@@ -19,7 +19,7 @@ var DebugRequest = RequestHandler(func(req *http.Request, ctx *context.Context) 
 
 	dump, err := httputil.DumpRequestOut(req, true)
 	if err != nil {
-		yaklog.Warnf("%s dump Request failed : %v", tamplate, err)
+		yaklog.Warnf("%s Failed to Dump Request  : %v", tamplate, err)
 	} else {
 		yaklog.Infof("%s\n%s", tamplate, dump)
 	}
@@ -35,7 +35,7 @@ var DebugResponse = ResponseHandler(func(resp *http.Response, ctx *context.Conte
 	}
 	dump, err := httputil.DumpResponse(resp, true)
 	if err != nil {
-		yaklog.Warnf("%s dump Response failed : %v", tamplate, err)
+		yaklog.Warnf("%s Failed to Dump Response : %v", tamplate, err)
 	} else {
 		yaklog.Infof("%s\n%s", tamplate, dump)
 	}

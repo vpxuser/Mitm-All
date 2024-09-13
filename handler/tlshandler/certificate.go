@@ -67,7 +67,7 @@ var WriteCertificate = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx 
 			yaklog.Errorf("Creating Fake Private Key Failed : %v", err)
 			return err
 		}
-		ctx.TLSContext.CertDER, err = certutils.CreateFakeCertificate(setting.CACert, setting.CAKey, realCert, ctx.TLSContext.KeyDER)
+		ctx.TLSContext.CertDER, err = certutils.ForgedCertificate(setting.CACert, setting.CAKey, realCert, ctx.TLSContext.KeyDER)
 		if err != nil {
 			yaklog.Errorf("%s %v", tamplate, err)
 			return err
