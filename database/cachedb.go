@@ -21,7 +21,7 @@ func init() {
 	var err error
 
 	Cache, err = gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
-		Logger: LogFunc[setting.Config.DB.RAM.LogSwitch],
+		Logger: LogFunc[setting.Config.DB.Cache.LogSwitch],
 	})
 	if err != nil {
 		yaklog.Fatalf("Open In-Memory SQLite Failed : %v", err)

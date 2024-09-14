@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"os"
 	"socks2https/pkg/certutils"
+	"socks2https/pkg/osutils"
 	"time"
 )
 
@@ -39,6 +40,7 @@ type Log struct {
 
 type Socks struct {
 	Host       string  `yaml:"host"`
+	Threads    int     `yaml:"threads"`
 	Timeout    Timeout `yaml:"timeout"`
 	Bound      bool    `yaml:"bound"`
 	MITMSwitch bool    `yaml:"mitmSwitch"`
@@ -75,15 +77,15 @@ type CA struct {
 }
 
 type DB struct {
-	RAM  RAM  `yaml:"ram"`
-	Disk Disk `yaml:"disk"`
+	Cache Cache `yaml:"ram"`
+	Main  Main  `yaml:"disk"`
 }
 
-type RAM struct {
+type Cache struct {
 	LogSwitch bool `yaml:"logSwitch"`
 }
 
-type Disk struct {
+type Main struct {
 	LogSwitch bool   `yaml:"logSwitch"`
 	Path      string `yaml:"path"`
 }
@@ -99,6 +101,11 @@ func init() {
 	}
 
 	yaklog.Info("Loading Configure Successfully.")
+
+	CAPathErr, DBPathErr := osutils.MkDir(Config.CA.Cert), osutils.MkDir(Config.DB.Main.Path)
+	if CAPathErr != nil || DBPathErr != nil {
+		yaklog.Fatalf("Failed to Create Dir")
+	}
 
 	CACert, CAKey, err = InitCertificateAndPrivateKey()
 	if err != nil {

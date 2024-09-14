@@ -22,6 +22,7 @@ const (
 type MITMSocks struct {
 	Host          string
 	Proxy         string
+	Threads       int
 	ClientTimeout time.Duration
 	TargetTimeout time.Duration
 	DefaultSNI    string
@@ -53,6 +54,11 @@ func (m *MITMSocks) Run() {
 		transport.Proxy = http.ProxyURL(proxyURL)
 	}
 
+	var threads chan struct{}
+	if m.Threads > 0 {
+		threads = make(chan struct{}, m.Threads)
+	}
+
 	for {
 		ctx := context.NewContext(tls.TLS_RSA_WITH_AES_128_CBC_SHA, m.DefaultSNI, transport)
 		ctx.LogTamplate = fmt.Sprintf("[clientId:%s]", ctx.ContextId)
@@ -76,6 +82,14 @@ func (m *MITMSocks) Run() {
 			}
 		}
 
-		go Handler(client, ctx)
+		if m.Threads > 0 {
+			threads <- struct{}{}
+			go func(client net.Conn, ctx *context.Context) {
+				defer func() { <-threads }()
+				Handler(client, ctx)
+			}(client, ctx)
+		} else {
+			go Handler(client, ctx)
+		}
 	}
 }

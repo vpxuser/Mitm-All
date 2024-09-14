@@ -27,6 +27,6 @@ var WriteChangeCipherSpec = TLSHandler(func(reader *bufio.Reader, conn net.Conn,
 		yaklog.Errorf("%s Write ChangeCipherSpec Failed : %v", tamplate, err)
 		return err
 	}
-	yaklog.Debugf("%s Server Start Encrypt Fragment", tamplate)
+	yaklog.Infof("%s Server Start Encrypt Fragment", tamplate)
 	return nil
 })

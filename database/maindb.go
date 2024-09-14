@@ -13,8 +13,8 @@ var DB *gorm.DB
 func init() {
 	var err error
 
-	DB, err = gorm.Open(sqlite.Open(setting.Config.DB.Disk.Path), &gorm.Config{
-		Logger: LogFunc[setting.Config.DB.Disk.LogSwitch],
+	DB, err = gorm.Open(sqlite.Open(setting.Config.DB.Main.Path), &gorm.Config{
+		Logger: LogFunc[setting.Config.DB.Main.LogSwitch],
 	})
 	if err != nil {
 		yaklog.Fatalf("Open SQLite Failed : %v", err)

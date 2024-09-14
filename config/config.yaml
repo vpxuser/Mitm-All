@@ -3,6 +3,7 @@ log:
   level: 4
 socks:
   host: 0.0.0.0:1080
+  threads: 0
   timeout:
     switch: false
     client: 60s
