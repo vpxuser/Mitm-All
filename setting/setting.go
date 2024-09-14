@@ -77,8 +77,8 @@ type CA struct {
 }
 
 type DB struct {
-	Cache Cache `yaml:"ram"`
-	Main  Main  `yaml:"disk"`
+	Cache Cache `yaml:"cache"`
+	Main  Main  `yaml:"main"`
 }
 
 type Cache struct {
