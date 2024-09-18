@@ -29,7 +29,12 @@ func init() {
 
 	yaklog.Infof("In-memory SQLite Connected Established Successfully.")
 
-	if err = Cache.AutoMigrate(&models.IPMapping{}); err != nil {
+	err = Cache.AutoMigrate(
+		&models.IPMapping{},
+		&models.DomainMapping{},
+		&models.CertMapping{},
+	)
+	if err != nil {
 		yaklog.Fatalf("Database Migration Failed : %v", err)
 	}
 

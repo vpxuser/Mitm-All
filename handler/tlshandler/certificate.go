@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 	"net"
 	"socks2https/context"
-	"socks2https/database"
 	"socks2https/pkg/certutils"
 	"socks2https/pkg/colorutils"
 	"socks2https/pkg/tlsutils"
@@ -23,7 +22,7 @@ import (
 var WriteCertificate = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx *context.Context) error {
 	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Mitm2ClientLog, colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "Handshake"), colorutils.SetColor(colorutils.RED_COLOR_TYPE, "Certificate"))
 	var realCert *x509.Certificate
-	wildcardDomain, err := services.GetWildcardDomain(database.DB, ctx.TLSContext.SNI)
+	wildcardDomain, err := services.GetWildcardDomain(ctx.TLSContext.SNI)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		realCert, err = certutils.GetRealCertificateWithTCP(ctx.TLSContext.SNI)
 		if err != nil {
@@ -43,7 +42,7 @@ var WriteCertificate = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx 
 				}
 			}
 		}
-		if err = services.AddDomainMapping(database.DB, ctx.TLSContext.SNI, wildcardDomain); err != nil {
+		if err = services.AddDomainMapping(ctx.TLSContext.SNI, wildcardDomain); err != nil {
 			yaklog.Errorf("Creating Domain Mapping Failed : %v", err)
 			return err
 		}
@@ -52,7 +51,7 @@ var WriteCertificate = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx 
 		return err
 	}
 
-	ctx.TLSContext.CertDER, ctx.TLSContext.KeyDER, err = services.GetCertAndKey(database.DB, wildcardDomain)
+	ctx.TLSContext.CertDER, ctx.TLSContext.KeyDER, err = services.GetCertAndKey(wildcardDomain)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		if realCert == nil {
 			realCert, err = certutils.GetRealCertificateWithTCP(ctx.TLSContext.SNI)
@@ -72,7 +71,7 @@ var WriteCertificate = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx 
 			yaklog.Errorf("%s %v", tamplate, err)
 			return err
 		}
-		if err := services.AddCertMapping(database.DB, wildcardDomain, ctx.TLSContext.CertDER, ctx.TLSContext.KeyDER); err != nil {
+		if err := services.AddCertMapping(wildcardDomain, ctx.TLSContext.CertDER, ctx.TLSContext.KeyDER); err != nil {
 			yaklog.Errorf("Creating Cert Mapping Failed : %v", err)
 			return err
 		}
