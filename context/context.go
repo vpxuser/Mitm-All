@@ -7,8 +7,10 @@ import (
 	"crypto/x509"
 	"github.com/google/uuid"
 	"hash"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -45,20 +47,16 @@ type TLSContext struct {
 	Protocol          string
 }
 
-func NewTLSContext(cipherSuite uint16, defaultSNI string) *TLSContext {
-	ctx := &TLSContext{
+// NewTLSContext 创建一个默认的 tls context
+func NewTLSContext() *TLSContext {
+	return &TLSContext{
 		Version:     tls.VersionTLS12,
-		SNI:         defaultSNI,
-		CipherSuite: cipherSuite,
+		CipherSuite: tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+		KeyExchange: KeyExchangeRSA,
+		MACLength:   20,
+		BlockLength: 16,
+		HashFunc:    sha1.New,
 	}
-	switch cipherSuite {
-	case tls.TLS_RSA_WITH_AES_128_CBC_SHA:
-		ctx.KeyExchange = KeyExchangeRSA
-		ctx.MACLength = 20
-		ctx.BlockLength = 16
-		ctx.HashFunc = sha1.New
-	}
-	return ctx
 }
 
 type HTTPContext struct {
@@ -67,13 +65,22 @@ type HTTPContext struct {
 	Response   *http.Response
 }
 
-func NewHTTPContext(transport *http.Transport) *HTTPContext {
-	ctx := &HTTPContext{
+// NewHTTPContext 创建一个默认的 http context
+func NewHTTPContext() *HTTPContext {
+	return &HTTPContext{
 		HttpClient: &http.Client{
-			Transport: transport,
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{
+					Timeout:   15 * time.Second,
+					KeepAlive: 15 * time.Second,
+				}).DialContext,
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+				ForceAttemptHTTP2: false,
+			},
 		},
 	}
-	return ctx
 }
 
 type Context struct {
@@ -91,11 +98,9 @@ type Context struct {
 	HTTPContext    *HTTPContext
 }
 
-func NewContext(cipherSuite uint16, defaultSNI string, transport *http.Transport) *Context {
-	ctx := &Context{
-		ContextId:   strings.ReplaceAll(uuid.New().String(), "-", "")[:16],
-		TLSContext:  NewTLSContext(cipherSuite, defaultSNI),
-		HTTPContext: NewHTTPContext(transport),
+// NewContext 创建一个默认的 context
+func NewContext() *Context {
+	return &Context{
+		ContextId: strings.ReplaceAll(uuid.New().String(), "-", "")[:16],
 	}
-	return ctx
 }

@@ -7,13 +7,16 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
+	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"socks2https/context"
 	"socks2https/mitm"
 	"socks2https/pkg/colorutils"
 	"socks2https/pkg/finger"
 	"socks2https/pkg/httptools"
 	"socks2https/pkg/tlsutils"
+	"socks2https/setting"
 )
 
 var ReadApplicationData = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx *context.Context) error {
@@ -30,6 +33,16 @@ var ReadApplicationData = TLSHandler(func(reader *bufio.Reader, conn net.Conn, c
 	switch finger.Inspect(bufio.NewReader(bytes.NewReader(record.Fragment[:7]))) {
 	case finger.HTTP:
 		ctx.TLSContext.Protocol = finger.HTTP
+
+		ctx.HTTPContext = context.NewHTTPContext()
+		if setting.Config.HTTP.Proxy != "" {
+			proxyURL, err := url.Parse(setting.Config.HTTP.Proxy)
+			if err != nil {
+				yaklog.Fatalf("Proxy URL is Invalid : %v", err)
+			}
+			ctx.HTTPContext.HttpClient.Transport.(*http.Transport).Proxy = http.ProxyURL(proxyURL)
+		}
+
 		ctx.HTTPContext.Request, err = httptools.ReadRequest(bufio.NewReader(bytes.NewReader(record.Fragment)), "https")
 		if err != nil {
 			yaklog.Errorf("%s %v", tamplate, err)

@@ -1,12 +1,9 @@
 package socks
 
 import (
-	"crypto/tls"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
-	"net/http"
-	"net/url"
 	"regexp"
 	"socks2https/context"
 	"socks2https/pkg/colorutils"
@@ -21,11 +18,18 @@ const (
 
 type MITMSocks struct {
 	Host          string
-	Proxy         string
 	Threads       int
 	ClientTimeout time.Duration
 	TargetTimeout time.Duration
-	DefaultSNI    string
+}
+
+func NewMITMSocks() *MITMSocks {
+	return &MITMSocks{
+		Host:          "0.0.0.0:1080",
+		Threads:       0,
+		ClientTimeout: time.Second * 30,
+		TargetTimeout: time.Second * 30,
+	}
 }
 
 func (m *MITMSocks) Run() {
@@ -35,32 +39,13 @@ func (m *MITMSocks) Run() {
 	}
 	yaklog.Infof("Start SOCKS Server On [%s]", m.Host)
 
-	transport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout:   m.TargetTimeout,
-			KeepAlive: m.TargetTimeout,
-		}).DialContext,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-		ForceAttemptHTTP2: false,
-	}
-
-	if m.Proxy != "" {
-		proxyURL, err := url.Parse(m.Proxy)
-		if err != nil {
-			yaklog.Fatalf("Proxy URL is Invalid : %v", err)
-		}
-		transport.Proxy = http.ProxyURL(proxyURL)
-	}
-
 	var threads chan struct{}
 	if m.Threads > 0 {
 		threads = make(chan struct{}, m.Threads)
 	}
 
 	for {
-		ctx := context.NewContext(tls.TLS_RSA_WITH_AES_128_CBC_SHA, m.DefaultSNI, transport)
+		ctx := context.NewContext()
 		ctx.LogTamplate = fmt.Sprintf("[clientId:%s]", ctx.ContextId)
 
 		client, err := server.Accept()

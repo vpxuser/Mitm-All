@@ -11,7 +11,7 @@ import (
 
 var DebugRequest = RequestHandler(func(req *http.Request, ctx *context.Context) (*http.Request, *http.Response) {
 	var tamplate string
-	if ctx.TLSContext.Protocol != "" {
+	if ctx.TLSContext != nil {
 		tamplate = fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "HTTP"), colorutils.SetColor(colorutils.RED_COLOR_TYPE, "Request"))
 	} else {
 		tamplate = fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, colorutils.SetColor(colorutils.RED_COLOR_TYPE, "Request"))
@@ -28,7 +28,7 @@ var DebugRequest = RequestHandler(func(req *http.Request, ctx *context.Context) 
 
 var DebugResponse = ResponseHandler(func(resp *http.Response, ctx *context.Context) *http.Response {
 	var tamplate string
-	if ctx.TLSContext.Protocol != "" {
+	if ctx.TLSContext != nil {
 		tamplate = fmt.Sprintf("%s [%s] [%s]", ctx.Mitm2ClientLog, colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "HTTP"), colorutils.SetColor(colorutils.RED_COLOR_TYPE, "Request"))
 	} else {
 		tamplate = fmt.Sprintf("%s [%s]", ctx.Mitm2ClientLog, colorutils.SetColor(colorutils.RED_COLOR_TYPE, "Request"))
