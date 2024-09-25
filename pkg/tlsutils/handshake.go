@@ -40,13 +40,14 @@ var HandshakeType = map[byte]string{
 	HandshakeTypeFinished:           "Finished",
 }
 
+// Handshake 握手消息记录
 type Handshake struct {
 	HandshakeType     uint8             `json:"handshakeType,omitempty"` // 握手消息类型
 	Length            uint32            `json:"length,omitempty"`        // 有效载荷长度（3 字节）
 	Payload           []byte            `json:"payload,omitempty"`       // 有效载荷数据
-	ClientHello       ClientHello       `json:"clientHello,omitempty"`
-	ServerHello       ServerHello       `json:"serverHello,omitempty"`
-	Certificate       Certificate       `json:"certificate,omitempty"`
+	ClientHello       *ClientHello      `json:"clientHello,omitempty"`
+	ServerHello       *ServerHello      `json:"serverHello,omitempty"`
+	Certificate       *Certificate      `json:"certificate,omitempty"`
 	ClientKeyExchange ClientKeyExchange `json:"clientKeyExchange,omitempty"`
 	Finished          []byte            `json:"finished,omitempty"`
 }
@@ -69,7 +70,7 @@ func ParseHandshake(data []byte, ctx *context.Context) (*Handshake, error) {
 		if err != nil {
 			return nil, err
 		}
-		handshake.ClientHello = *clientHello
+		handshake.ClientHello = clientHello
 	case HandshakeTypeClientKeyExchange:
 		clientKeyExchange, err := ParseClientKeyExchange(handshake.Payload, ctx)
 		if err != nil {

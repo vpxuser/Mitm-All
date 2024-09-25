@@ -19,7 +19,8 @@ var ReadFinished = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx *con
 
 	record, err := tlsutils.FilterRecord(reader, tlsutils.ContentTypeHandshake, tlsutils.HandshakeTypeFinished, ctx)
 	if err != nil {
-		yaklog.Errorf("%s %v", tamplate, err)
+		//yaklog.Errorf("%s %v", tamplate, err)
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return err
 	}
 

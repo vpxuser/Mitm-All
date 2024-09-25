@@ -7,15 +7,16 @@ import (
 	"time"
 )
 
+// ServerHello 服务端握手消息记录
 type ServerHello struct {
-	Version           uint16      `json:"version,omitempty"`
-	Random            [32]byte    `json:"random,omitempty"`
-	SessionIDLength   uint8       `json:"sessionIDLength,omitempty"`
-	SessionID         []byte      `json:"sessionID,omitempty"`
-	CipherSuite       uint16      `json:"cipherSuite,omitempty"`
-	CompressionMethod uint8       `json:"compressionMethod,omitempty"`
-	ExtensionsLength  uint16      `json:"extensionsLength,omitempty"`
-	Extensions        []Extension `json:"extensions,omitempty"`
+	Version           uint16       `json:"version,omitempty"`
+	Random            [32]byte     `json:"random,omitempty"`
+	SessionIDLength   uint8        `json:"sessionIDLength,omitempty"`
+	SessionID         []byte       `json:"sessionID,omitempty"`
+	CipherSuite       uint16       `json:"cipherSuite,omitempty"`
+	CompressionMethod uint8        `json:"compressionMethod,omitempty"`
+	ExtensionsLength  uint16       `json:"extensionsLength,omitempty"`
+	Extensions        []*Extension `json:"extensions,omitempty"`
 }
 
 func (s *ServerHello) GetRaw() []byte {
@@ -52,7 +53,7 @@ func NewServerHello(version, cipherSuite uint16) (*Record, error) {
 	handshake := &Handshake{
 		HandshakeType: HandshakeTypeServerHello,
 		Length:        uint32(len(serverHelloRaw)),
-		ServerHello:   *serverHello,
+		ServerHello:   serverHello,
 		Payload:       serverHelloRaw,
 	}
 	handshakeRaw := handshake.GetRaw()
@@ -60,7 +61,7 @@ func NewServerHello(version, cipherSuite uint16) (*Record, error) {
 		ContentType: ContentTypeHandshake,
 		Version:     version,
 		Length:      uint16(len(handshakeRaw)),
-		Handshake:   *handshake,
+		Handshake:   handshake,
 		Fragment:    handshakeRaw,
 	}, nil
 }

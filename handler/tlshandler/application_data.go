@@ -24,7 +24,8 @@ var ReadApplicationData = TLSHandler(func(reader *bufio.Reader, conn net.Conn, c
 
 	record, err := tlsutils.FilterRecord(reader, tlsutils.ContentTypeApplicationData, 0xff, ctx)
 	if err != nil {
-		yaklog.Errorf("%s %v", tamplate, err)
+		//yaklog.Errorf("%s %v", tamplate, err)
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return err
 	}
 

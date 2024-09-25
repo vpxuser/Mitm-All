@@ -32,11 +32,12 @@ const (
 	ExtensionTypeKeyShare                            uint16 = 0x0033 // key_share (TLS 1.3)
 )
 
+// Extension 扩展字段
 type Extension struct {
-	Type       uint16     `json:"type"`
-	Length     uint16     `json:"length"`
-	Payload    []byte     `json:"payload,omitempty"`
-	ServerName ServerName `json:"serverName,omitempty"`
+	Type       uint16      `json:"type"`
+	Length     uint16      `json:"length"`
+	Payload    []byte      `json:"payload,omitempty"`
+	ServerName *ServerName `json:"serverName,omitempty"`
 }
 
 func ParseExtension(data []byte) (*Extension, error) {
@@ -57,7 +58,7 @@ func ParseExtension(data []byte) (*Extension, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse ServerName failed : %v", err)
 		}
-		extension.ServerName = *serverName
+		extension.ServerName = serverName
 	}
 	return extension, nil
 }

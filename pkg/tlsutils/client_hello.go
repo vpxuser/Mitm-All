@@ -4,17 +4,18 @@ import (
 	"encoding/binary"
 )
 
+// ClientHello 客户端握手记录
 type ClientHello struct {
-	Version                  uint16      `json:"version,omitempty"`
-	Random                   [32]byte    `json:"random,omitempty"`
-	SessionIDLength          uint8       `json:"sessionIDLength,omitempty"`
-	SessionID                []byte      `json:"sessionID,omitempty"`
-	CipherSuitesLength       uint16      `json:"cipherSuitesLength,omitempty"`
-	CipherSuites             []uint16    `json:"cipherSuites,omitempty"`
-	CompressionMethodsLength uint8       `json:"compressionMethodsLength,omitempty"`
-	CompressionMethods       []uint8     `json:"compressionMethods,omitempty"`
-	ExtensionsLength         uint16      `json:"extensionsLength,omitempty"`
-	Extensions               []Extension `json:"extensions,omitempty"`
+	Version                  uint16       `json:"version,omitempty"`
+	Random                   [32]byte     `json:"random,omitempty"`
+	SessionIDLength          uint8        `json:"sessionIDLength,omitempty"`
+	SessionID                []byte       `json:"sessionID,omitempty"`
+	CipherSuitesLength       uint16       `json:"cipherSuitesLength,omitempty"`
+	CipherSuites             []uint16     `json:"cipherSuites,omitempty"`
+	CompressionMethodsLength uint8        `json:"compressionMethodsLength,omitempty"`
+	CompressionMethods       []uint8      `json:"compressionMethods,omitempty"`
+	ExtensionsLength         uint16       `json:"extensionsLength,omitempty"`
+	Extensions               []*Extension `json:"extensions,omitempty"`
 }
 
 // ParseClientHello 解析Clienthello函数
@@ -47,7 +48,7 @@ func ParseClientHello(data []byte) (*ClientHello, error) {
 		if err != nil {
 			return nil, err
 		}
-		clientHello.Extensions = append(clientHello.Extensions, *extension)
+		clientHello.Extensions = append(clientHello.Extensions, extension)
 		i += 2 + 2 + int(extension.Length)
 	}
 	return clientHello, nil

@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+// Certificate 证书消息类型
 type Certificate struct {
 	CertificatesLength uint32 `json:"certificatesLength,omitempty"` // 3个字节
 	Certificates       []struct {
@@ -27,7 +28,7 @@ func NewCertificate(version uint16, certDERs []*x509.Certificate) (*Record, erro
 	handshake := &Handshake{
 		HandshakeType: HandshakeTypeCertificate,
 		Length:        uint32(len(certificateRaw)),
-		Certificate:   *certificate,
+		Certificate:   certificate,
 		Payload:       certificateRaw,
 	}
 	handshakeRaw := handshake.GetRaw()
@@ -35,7 +36,7 @@ func NewCertificate(version uint16, certDERs []*x509.Certificate) (*Record, erro
 		ContentType: ContentTypeHandshake,
 		Version:     version,
 		Length:      uint16(len(handshakeRaw)),
-		Handshake:   *handshake,
+		Handshake:   handshake,
 		Fragment:    handshakeRaw,
 	}, nil
 }

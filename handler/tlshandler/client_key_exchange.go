@@ -17,7 +17,8 @@ var ReadClientKeyExchange = TLSHandler(func(reader *bufio.Reader, conn net.Conn,
 
 	record, err := tlsutils.FilterRecord(reader, tlsutils.ContentTypeHandshake, tlsutils.HandshakeTypeClientKeyExchange, ctx)
 	if err != nil {
-		yaklog.Errorf("%s %v", tamplate, err)
+		//yaklog.Errorf("%s %v", tamplate, err)
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return err
 	}
 

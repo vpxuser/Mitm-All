@@ -22,6 +22,7 @@ func readUnknownRecord(data []byte, ctx *context.Context) (*Record, error) {
 	return record, nil
 }
 
+// FilterRecord 消息记录过滤器，过滤出想要的消息记录类型
 func FilterRecord(reader *bufio.Reader, contentType uint8, handshakeType uint8, ctx *context.Context) (*Record, error) {
 	unknownRecord, err := ReadTLSRecord(reader)
 	if err != nil {

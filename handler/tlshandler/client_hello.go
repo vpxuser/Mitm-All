@@ -17,7 +17,8 @@ var ReadClientHello = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx *
 	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "Handshake"), colorutils.SetColor(colorutils.RED_COLOR_TYPE, "Client Hello"))
 	record, err := tlsutils.FilterRecord(reader, tlsutils.ContentTypeHandshake, tlsutils.HandshakeTypeClientHello, ctx)
 	if err != nil {
-		yaklog.Errorf("%s %v", tamplate, err)
+		//yaklog.Errorf("%s %v", tamplate, err)
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return err
 	}
 	ctx.TLSContext.HandshakeMessages = append(ctx.TLSContext.HandshakeMessages, record.Fragment)
@@ -41,7 +42,7 @@ var ReadClientHello = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx *
 			return nil
 		}
 		ctx.TLSContext.SNI = domain
-		yaklog.Infof("%s Parse CDN IP %s to Domain %s", tamplate, ctx.Host, domain)
+		yaklog.Infof("%s Reverse  : %s => %s", tamplate, ctx.Host, domain)
 		return nil
 	}
 	err = errors.New("Not Support Cipher Suites")

@@ -47,17 +47,19 @@ var ContentType = map[uint8]string{
 	ContentTypeCustomExperimental:  "Custom Experimental",
 }
 
+// Record 记录消息类型
 type Record struct {
-	ContentType      uint8     `json:"contentType"` //1 byte
-	Version          uint16    `json:"version"`     //2 byte
-	Length           uint16    `json:"length"`      //2 byte
-	Fragment         []byte    `json:"fragment,omitempty"`
-	Handshake        Handshake `json:"handshake,omitempty"`
-	ChangeCipherSpec byte      `json:"changeCipherSpec,omitempty"`
-	Alert            Alert     `json:"alert,omitempty"`
-	ApplicationData  []byte    `json:"applicationData,omitempty"`
+	ContentType      uint8      `json:"contentType"` //1 byte
+	Version          uint16     `json:"version"`     //2 byte
+	Length           uint16     `json:"length"`      //2 byte
+	Fragment         []byte     `json:"fragment,omitempty"`
+	Handshake        *Handshake `json:"handshake,omitempty"`
+	ChangeCipherSpec byte       `json:"changeCipherSpec,omitempty"`
+	Alert            *Alert     `json:"alert,omitempty"`
+	ApplicationData  []byte     `json:"applicationData,omitempty"`
 }
 
+// ParseBlockRecord 解析分块加密的tls记录
 func ParseBlockRecord(blockRecord []byte, ctx *context.Context) (*Record, error) {
 	// 获取对称解密的IV，获取需要解密的密文
 	iv, cipherFragment := blockRecord[5:5+ctx.TLSContext.BlockLength], blockRecord[5+ctx.TLSContext.BlockLength:]
@@ -107,6 +109,7 @@ func ParseBlockRecord(blockRecord []byte, ctx *context.Context) (*Record, error)
 	return record, nil
 }
 
+// ParseRecord 解析明文tls记录
 func ParseRecord(data []byte, ctx *context.Context) (*Record, error) {
 	if len(data) < 5 {
 		return nil, fmt.Errorf("TLS Record is invaild")
@@ -116,10 +119,7 @@ func ParseRecord(data []byte, ctx *context.Context) (*Record, error) {
 		Version:     binary.BigEndian.Uint16(data[1:3]),
 		Length:      binary.BigEndian.Uint16(data[3:5]),
 	}
-	//if len(data) != 5+int(record.Length) {
-	//	return nil, fmt.Errorf("TLS Record Fragment is incomplete")
-	//}
-	//record.Fragment = data[5 : 5+record.Length]
+
 	if len(data) < 5+int(record.Length) {
 		return nil, fmt.Errorf("TLS Record Fragment is incomplete")
 	}
@@ -130,7 +130,7 @@ func ParseRecord(data []byte, ctx *context.Context) (*Record, error) {
 		if err != nil {
 			return nil, err
 		}
-		record.Handshake = *handshake
+		record.Handshake = handshake
 	case ContentTypeChangeCipherSpec:
 		if len(record.Fragment) != 1 {
 			return nil, fmt.Errorf("Change Cipher Spec is invaild")
@@ -141,7 +141,7 @@ func ParseRecord(data []byte, ctx *context.Context) (*Record, error) {
 		if err != nil {
 			return nil, err
 		}
-		record.Alert = *alert
+		record.Alert = alert
 	case ContentTypeApplicationData:
 		record.ApplicationData = record.Fragment
 	default:
@@ -150,46 +150,32 @@ func ParseRecord(data []byte, ctx *context.Context) (*Record, error) {
 	return record, nil
 }
 
+// NewBlockRecord 创建一个分块加密的tls记录
 func NewBlockRecord(record *Record, ctx *context.Context) ([]byte, error) {
 	seqNum := make([]byte, 8)
 	binary.BigEndian.PutUint64(seqNum, ctx.TLSContext.ServerSeqNum)
 
 	// 生成MAC
 	seqFragment := append(seqNum, record.GetRaw()...)
-	//yaklog.Debugf("seqFragment Length : %d , seqFragment : %v", len(seqFragment), seqFragment)
-	//todo
 	mac := crypt.HmacHash(ctx.TLSContext.ServerMACKey, seqFragment, ctx.TLSContext.HashFunc)
-	//yaklog.Debugf("mac Length : %d , mac : %v", len(mac), mac)
 
+	// tls record密文序号自增
 	ctx.TLSContext.ServerSeqNum++
 
 	// 拼接Fragment和MAC
 	plainFragment := append(record.Fragment, mac...)
-	//yaklog.Debugf("plainFragment Length : %d , plainFragment : %v", len(plainFragment), plainFragment)
 
 	// 拼接填充
 	paddingLength := ctx.TLSContext.BlockLength - len(plainFragment)%ctx.TLSContext.BlockLength - 1
-	//yaklog.Debugf("paddingLength : %v", paddingLength)
 	padding := bytes.Repeat([]byte{byte(paddingLength)}, paddingLength)
-	//yaklog.Debugf("padding Length : %d , padding : %v", len(padding), padding)
 	paddingFragment := append(plainFragment, append(padding, byte(paddingLength))...)
-	//yaklog.Debugf("paddingFragment Length : %d , paddingFragment : %v", len(paddingFragment), paddingFragment)
 
-	//todo
-	//yaklog.Debugf("ServerIV length : %d , ServerIV : %v", len(context.ServerIV), context.ServerIV)
-	//todo
 	cipherFragment, err := crypt.AESCBCEncrypt(paddingFragment, ctx.TLSContext.ServerKey, ctx.TLSContext.ServerIV)
 	if err != nil {
 		return nil, err
 	}
-	//todo
-	//yaklog.Debugf("ServerIV length : %d , ServerIV : %v", len(context.ServerIV), context.ServerIV)
-	//yaklog.Debugf("cipherFragment Length : %d , cipherFragment : %v", len(cipherFragment), cipherFragment)
 
-	// 拼接IV
-	//todo
 	fragment := append(ctx.TLSContext.ServerIV, cipherFragment...)
-	//yaklog.Debugf("fragment Length : %d , fragment : %v", len(fragment), fragment)
 
 	blockRecord := &Record{
 		ContentType: record.ContentType,

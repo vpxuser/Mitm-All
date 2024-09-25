@@ -78,6 +78,7 @@ var AlertDescription = map[uint8]string{
 	AlertDescriptionNoApplicationProtocol:  "No Application Protocol",
 }
 
+// Alert 告警消息类型
 type Alert struct {
 	Level       uint8 `json:"level,omitempty"`       // 告警级别
 	Description uint8 `json:"description,omitempty"` // 告警描述
@@ -107,6 +108,6 @@ func NewAlert(version uint16, level, description uint8) *Record {
 		Version:     version,
 		Length:      2,
 		Fragment:    alert.GetRaw(),
-		Alert:       *alert,
+		Alert:       alert,
 	}
 }

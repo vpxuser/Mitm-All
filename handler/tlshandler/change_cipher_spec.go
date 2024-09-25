@@ -13,7 +13,8 @@ import (
 var ReadChangeCipherSpec = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx *context.Context) error {
 	tamplate := fmt.Sprintf("%s [%s]", ctx.Client2MitmLog, colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "Change Cipher Spec"))
 	if _, err := tlsutils.FilterRecord(reader, tlsutils.ContentTypeChangeCipherSpec, 0xff, ctx); err != nil {
-		yaklog.Errorf("%s %v", tamplate, err)
+		//yaklog.Errorf("%s %v", tamplate, err)
+		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return err
 	}
 	ctx.TLSContext.ClientEncrypted = true

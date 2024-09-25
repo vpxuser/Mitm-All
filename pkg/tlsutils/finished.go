@@ -35,6 +35,7 @@ const (
 	TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256   uint16 = 0xCCA8
 )
 
+// VerifyPRF 消息记录校验算法
 func VerifyPRF(version uint16, secret, label []byte, handshakeMessages [][]byte, outputLength int) []byte {
 	var hashFunc hash.Hash
 	switch version {
@@ -50,13 +51,8 @@ func VerifyPRF(version uint16, secret, label []byte, handshakeMessages [][]byte,
 }
 
 func NewFinished(ctx *context.Context) *Record {
-	//yaklog.Debugf("Handshake Messages Length : %d", len(context.HandshakeMessages))
-	//for i, h := range context.HandshakeMessages {
-	//	yaklog.Debugf("Handshake Messages %d : %v", i, h)
-	//}
 	verifyData := VerifyPRF(ctx.TLSContext.Version, ctx.TLSContext.MasterSecret, []byte(crypt.LabelServerFinished), ctx.TLSContext.HandshakeMessages, 12)
-	//yaklog.Debugf(colorutils.SetColor(colorutils.RED_COLOR_TYPE, fmt.Sprintf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)))
-	//yaklog.Debugf("Verify Data Length : %d , Verify Data : %v", len(verifyData), verifyData)
+
 	handshake := &Handshake{
 		HandshakeType: HandshakeTypeFinished,
 		Length:        uint32(len(verifyData)),
@@ -69,6 +65,6 @@ func NewFinished(ctx *context.Context) *Record {
 		Version:     ctx.TLSContext.Version,
 		Length:      uint16(len(handshakeRaw)),
 		Fragment:    handshakeRaw,
-		Handshake:   *handshake,
+		Handshake:   handshake,
 	}
 }
