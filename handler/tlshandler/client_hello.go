@@ -6,6 +6,7 @@ import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
+	"regexp"
 	"socks2https/context"
 	"socks2https/database"
 	"socks2https/pkg/colorutils"
@@ -17,7 +18,6 @@ var ReadClientHello = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx *
 	tamplate := fmt.Sprintf("%s [%s] [%s]", ctx.Client2MitmLog, colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "Handshake"), colorutils.SetColor(colorutils.RED_COLOR_TYPE, "Client Hello"))
 	record, err := tlsutils.FilterRecord(reader, tlsutils.ContentTypeHandshake, tlsutils.HandshakeTypeClientHello, ctx)
 	if err != nil {
-		//yaklog.Errorf("%s %v", tamplate, err)
 		yaklog.Errorf("%s %v", ctx.Client2MitmLog, err)
 		return err
 	}
@@ -36,6 +36,14 @@ var ReadClientHello = TLSHandler(func(reader *bufio.Reader, conn net.Conn, ctx *
 			yaklog.Infof("%s Domain : %s", tamplate, ctx.TLSContext.SNI)
 			return nil
 		}
+
+		// 如果客户端使用的是http隧道可直接获取sni
+		if regexp.MustCompile(`^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|localhost)$`).MatchString(ctx.Host) {
+			ctx.TLSContext.SNI = ctx.Host
+			yaklog.Infof("%s HTTP CONNECT Domain : %s", tamplate, ctx.Host)
+			return nil
+		}
+
 		domain, err := services.GetDomainByIP(database.Cache, ctx.Host)
 		if err != nil {
 			yaklog.Infof("%s Use Default Domain : %s", tamplate, ctx.TLSContext.SNI)

@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
+	"socks2https/porxy"
 	"socks2https/setting"
-	"socks2https/socks"
 )
 
 const PROGRAM_NAME = "\n███████╗ ██████╗  ██████╗██╗  ██╗███████╗██████╗ ██╗  ██╗████████╗████████╗██████╗ ███████╗\n██╔════╝██╔═══██╗██╔════╝██║ ██╔╝██╔════╝╚════██╗██║  ██║╚══██╔══╝╚══██╔══╝██╔══██╗██╔════╝\n███████╗██║   ██║██║     █████╔╝ ███████╗ █████╔╝███████║   ██║      ██║   ██████╔╝███████╗\n╚════██║██║   ██║██║     ██╔═██╗ ╚════██║██╔═══╝ ██╔══██║   ██║      ██║   ██╔═══╝ ╚════██║\n███████║╚██████╔╝╚██████╗██║  ██╗███████║███████╗██║  ██║   ██║      ██║   ██║     ███████║\n╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝   ╚═╝      ╚═╝   ╚═╝     ╚══════╝\n                                                                                           \n"
@@ -15,7 +15,7 @@ func init() {
 }
 
 func main() {
-	mitmSocks := socks.NewMITMSocks()
+	mitmSocks := porxy.NewMITMServer()
 	mitmSocks.Host = setting.Config.Socks.Host
 	mitmSocks.Threads = setting.Config.Socks.Threads
 	mitmSocks.ClientTimeout = setting.Config.Socks.Timeout.Client
