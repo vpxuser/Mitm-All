@@ -24,13 +24,13 @@ var (
 )
 
 type Configure struct {
-	Log   Log    `yaml:"log"`
-	Socks Socks  `yaml:"socks"`
-	TLS   TLS    `yaml:"tls"`
-	HTTP  HTTP   `yaml:"http"`
-	DNS   string `yaml:"dns"`
-	CA    CA     `yaml:"ca"`
-	DB    DB     `yaml:"db"`
+	Log  Log    `yaml:"log"`
+	MITM MITM   `yaml:"mitm"`
+	TLS  TLS    `yaml:"tls"`
+	HTTP HTTP   `yaml:"http"`
+	DNS  string `yaml:"dns"`
+	CA   CA     `yaml:"ca"`
+	DB   DB     `yaml:"db"`
 }
 
 type Log struct {
@@ -38,13 +38,13 @@ type Log struct {
 	Level       golog.Level `yaml:"level"`
 }
 
-type Socks struct {
-	Host       string  `yaml:"host"`
-	Threads    int     `yaml:"threads"`
-	Timeout    Timeout `yaml:"timeout"`
-	Bound      bool    `yaml:"bound"`
-	MITMSwitch bool    `yaml:"mitmSwitch"`
-	Dump       Dump    `yaml:"dump"`
+type MITM struct {
+	Host    string  `yaml:"host"`
+	Threads int     `yaml:"threads"`
+	Timeout Timeout `yaml:"timeout"`
+	Bound   bool    `yaml:"bound"`
+	Switch  bool    `yaml:"switch"`
+	Dump    Dump    `yaml:"dump"`
 }
 
 type Timeout struct {

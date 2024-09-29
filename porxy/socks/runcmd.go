@@ -128,7 +128,7 @@ func Runcmd(reader *bufio.Reader, conn net.Conn, ctx *context.Context) error {
 	// |  1  |  1  |   1   |   1  | Variable |    2     |
 	// +-----+-----+-------+------+----------+----------+
 	resp := []byte{SOCKS5_VERSION, SUCCEEDED_REP, RESERVED}
-	if setting.Config.Socks.Bound {
+	if setting.Config.MITM.Bound {
 		resp = append(resp, aTyp)
 		if aLen != 0x00 {
 			resp = append(resp, aLen)

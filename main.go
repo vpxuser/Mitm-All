@@ -16,9 +16,9 @@ func init() {
 
 func main() {
 	mitmSocks := porxy.NewMITMServer()
-	mitmSocks.Host = setting.Config.Socks.Host
-	mitmSocks.Threads = setting.Config.Socks.Threads
-	mitmSocks.ClientTimeout = setting.Config.Socks.Timeout.Client
-	mitmSocks.TargetTimeout = setting.Config.Socks.Timeout.Target
+	mitmSocks.Host = setting.Config.MITM.Host
+	mitmSocks.Threads = setting.Config.MITM.Threads
+	mitmSocks.ClientTimeout = setting.Config.MITM.Timeout.Client
+	mitmSocks.TargetTimeout = setting.Config.MITM.Timeout.Target
 	mitmSocks.Run()
 }

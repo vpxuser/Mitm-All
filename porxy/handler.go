@@ -46,7 +46,7 @@ func Handler(reader *bufio.Reader, conn net.Conn, ctx *context.Context) {
 		}
 	}
 
-	if setting.Config.Socks.MITMSwitch {
+	if setting.Config.MITM.Switch {
 		switch finger.Inspect(reader) {
 		case finger.TLS:
 			ctx.Protocol = finger.TLS

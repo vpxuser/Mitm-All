@@ -25,8 +25,8 @@ func Direct(reader *bufio.Reader, conn net.Conn, ctx *context.Context) {
 	}
 	defer dst.Close()
 	yaklog.Infof("%s New Target Connection Successfully Established.", ctx.Mitm2TargetLog)
-	if setting.Config.Socks.Timeout.Switch {
-		if err = dst.SetDeadline(time.Now().Add(setting.Config.Socks.Timeout.Target)); err != nil {
+	if setting.Config.MITM.Timeout.Switch {
+		if err = dst.SetDeadline(time.Now().Add(setting.Config.MITM.Timeout.Target)); err != nil {
 			yaklog.Warnf("%s Failed to Set Target Connection Deadline : %v", ctx.Mitm2TargetLog, err)
 		}
 	}
@@ -34,7 +34,7 @@ func Direct(reader *bufio.Reader, conn net.Conn, ctx *context.Context) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if setting.Config.Socks.Dump.Switch && ctx.Port == setting.Config.Socks.Dump.Port {
+		if setting.Config.MITM.Dump.Switch && ctx.Port == setting.Config.MITM.Dump.Port {
 			yaklog.Infof("%s %s", ctx.Mitm2TargetLog, colorutils.SetColor(colorutils.RED_COLOR_TYPE, "Reading Client IM Data"))
 			if _, err = io.Copy(dst, io.TeeReader(reader, os.Stdout)); err != nil {
 				if errors.Is(err, io.ErrUnexpectedEOF) {
@@ -58,7 +58,7 @@ func Direct(reader *bufio.Reader, conn net.Conn, ctx *context.Context) {
 	}()
 	go func() {
 		defer wg.Done()
-		if setting.Config.Socks.Dump.Switch && ctx.Port == setting.Config.Socks.Dump.Port {
+		if setting.Config.MITM.Dump.Switch && ctx.Port == setting.Config.MITM.Dump.Port {
 			yaklog.Infof("%s %s", ctx.Mitm2TargetLog, colorutils.SetColor(colorutils.RED_COLOR_TYPE, "Reading Target IM Data"))
 			if _, err = io.Copy(conn, io.TeeReader(dst, os.Stdout)); err != nil {
 				if errors.Is(err, io.ErrUnexpectedEOF) {

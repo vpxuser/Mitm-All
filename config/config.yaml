@@ -3,7 +3,7 @@ log:
   colorSwitch: true
   # 日志等级，5为开启debug日志，4为普通日志
   level: 4
-socks:
+mitm:
   # socks5服务监听地址，默认监听本地1080端口
   host: 0.0.0.0:1080
   # 工具线程数，默认最大
@@ -18,7 +18,7 @@ socks:
   # socks5服务的DNS解析开关，默认关闭
   bound: false
   # 是否开启TCP中间人攻击的开关，默认开启（注意：关闭后就只是一个单纯的socks5代理服务）
-  mitmSwitch: true
+  switch: true
   # 打印TCP流到控制台（对于无法识别的协议，即：HTTP、HTTPS之外的协议）
   dump:
     # 默认关闭

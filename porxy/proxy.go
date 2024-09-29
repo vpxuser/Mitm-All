@@ -62,7 +62,7 @@ func (m *MITMServer) Run() {
 
 		yaklog.Infof("%s New Client Connection Successfully Established", ctx.LogTamplate)
 
-		if setting.Config.Socks.Timeout.Switch {
+		if setting.Config.MITM.Timeout.Switch {
 			if err = client.SetDeadline(time.Now().Add(m.ClientTimeout)); err != nil {
 				yaklog.Warnf("%s Set Client Deadline Failed : %v", ctx.LogTamplate, err)
 			}
