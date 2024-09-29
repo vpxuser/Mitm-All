@@ -1,7 +1,8 @@
-# socks2https
-A tool that converts the SOCKS5 protocol to HTTP and HTTPS protocols
+# Mitm-All
+一个致力于实现多协议中间人攻击的工具
 
-一个将socks5协议转化为http和https协议的工具
+- 已实现HTTP、SOCKS5代理协议端口复用
+- 已实现TCP、HTTP、TLS中间人攻击功能
 
 ## 抓不到包的常见原因
 
@@ -66,7 +67,7 @@ A tool that converts the SOCKS5 protocol to HTTP and HTTPS protocols
 ```powershell
 set GOOS=linux
 set GOARCH=amd64
-go build -o socks2https main.go
+go build -o mitmall main.go
 ```
 
 - 编译windows可执行文件
@@ -74,7 +75,7 @@ go build -o socks2https main.go
 ```powershell
 set GOOS=windows
 set GOARCH=amd64
-go build -o socks2https.exe main.go
+go build -o mitmall.exe main.go
 ```
 
 - 编译macOS可执行文件
@@ -82,7 +83,7 @@ go build -o socks2https.exe main.go
 ```powershell
 set GOOS=darwin
 set GOARCH=amd64
-go build -o socks2https main.go
+go build -o mitmall main.go
 ```
 
 ### 配置
@@ -96,7 +97,7 @@ log:
   colorSwitch: true
   # 日志等级，5为开启debug日志，4为普通日志
   level: 4
-socks:
+mitm:
   # socks5服务监听地址，默认监听本地1080端口
   host: 0.0.0.0:1080
   # 工具线程数，默认最大
@@ -111,7 +112,7 @@ socks:
   # socks5服务的DNS解析开关，默认关闭
   bound: false
   # 是否开启TCP中间人攻击的开关，默认开启（注意：关闭后就只是一个单纯的socks5代理服务）
-  mitmSwitch: true
+  switch: true
   # 打印TCP流到控制台（对于无法识别的协议，即：HTTP、HTTPS之外的协议）
   dump:
     # 默认关闭
@@ -126,7 +127,7 @@ tls:
   # 是否开启TLS记录MAC校验，默认关闭
   verifyMAC: false
   # 默认SNI，如果ClientHello没有SNI扩展时，工具会通过默认SNI来获取服务器证书，这里必须配置！！！
-  defaultSNI: baidu.com
+  defaultSNI: okii.com
 http:
   # HTTP中间人攻击开关，默认开启
   mitmSwitch: true
@@ -158,7 +159,7 @@ db:
 - 运行可执行程序
 
 ```powershell
-.\socks2https.exe
+.\mitmall.exe
 ```
 
 ### 代理
