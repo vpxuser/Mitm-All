@@ -28,7 +28,7 @@ const (
 
 // socks握手处理函数
 // 暂时只支持 未授权访问 方法
-func Handshake(conn net.Conn, ctx *context.Context) error {
+func Handshake(reader *bufio.Reader, conn net.Conn, ctx *context.Context) error {
 	// 客户端请求包
 	// +----+----------+----------+
 	// |VER | NMETHODS | METHODS  |
@@ -36,7 +36,7 @@ func Handshake(conn net.Conn, ctx *context.Context) error {
 	// | 1  |    1     | 1 to 255 |
 	// +----+----------+----------+
 	buf := make([]byte, 2)
-	if _, err := conn.Read(buf); err != nil {
+	if _, err := reader.Read(buf); err != nil {
 		return fmt.Errorf("read VER and NMETHODS failed : %v", err)
 	}
 	ver, nMethods := buf[0], buf[1]
@@ -45,7 +45,7 @@ func Handshake(conn net.Conn, ctx *context.Context) error {
 		return fmt.Errorf("unsupport SOCKS version : %d", ver)
 	}
 	methods := make([]byte, nMethods)
-	if _, err := conn.Read(methods); err != nil {
+	if _, err := reader.Read(methods); err != nil {
 		return fmt.Errorf("read METHODS failed : %v", err)
 	}
 	yaklog.Debugf("%s METHODS : %v", ctx.LogTamplate, methods)

@@ -14,8 +14,7 @@ import (
 	"socks2https/setting"
 )
 
-func Connect(conn net.Conn, ctx *context.Context) {
-	reader := bufio.NewReader(conn)
+func Connect(reader *bufio.Reader, conn net.Conn, ctx *context.Context) {
 	if setting.Config.Socks.MITMSwitch {
 		switch finger.Inspect(reader) {
 		case finger.TLS:

@@ -1,6 +1,7 @@
 package socks
 
 import (
+	"bufio"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
@@ -71,10 +72,10 @@ func (m *MITMSocks) Run() {
 			threads <- struct{}{}
 			go func(client net.Conn, ctx *context.Context) {
 				defer func() { <-threads }()
-				Handler(client, ctx)
+				Handler(bufio.NewReader(client), client, ctx)
 			}(client, ctx)
 		} else {
-			go Handler(client, ctx)
+			go Handler(bufio.NewReader(client), client, ctx)
 		}
 	}
 }

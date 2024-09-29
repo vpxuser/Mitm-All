@@ -1,6 +1,7 @@
 package socks
 
 import (
+	"bufio"
 	"fmt"
 	yaklog "github.com/yaklang/yaklang/common/log"
 	"net"
@@ -36,7 +37,7 @@ const (
 	ADDRESS_TYPE_NOT_SUPPORTED_REP   byte = 0x08
 )
 
-func Runcmd(conn net.Conn, ctx *context.Context) error {
+func Runcmd(reader *bufio.Reader, conn net.Conn, ctx *context.Context) error {
 	// 客户端请求包
 	// +-----+-----+-------+------+----------+----------+
 	// | VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
@@ -44,7 +45,7 @@ func Runcmd(conn net.Conn, ctx *context.Context) error {
 	// |  1  |  1  | X'00' |  1   | Variable |    2     |
 	// +-----+-----+-------+------+----------+----------+
 	buf := make([]byte, 4)
-	if _, err := conn.Read(buf); err != nil {
+	if _, err := reader.Read(buf); err != nil {
 		return fmt.Errorf("read VER CMD RSV ATYP failed : %v", err)
 	}
 	ver, cmd, rsv, aTyp := buf[0], buf[1], buf[2], buf[3]
@@ -73,7 +74,7 @@ func Runcmd(conn net.Conn, ctx *context.Context) error {
 		buf = make([]byte, net.IPv6len)
 		fallthrough
 	case IPV4_ATYPE:
-		if _, err := conn.Read(buf); err != nil {
+		if _, err := reader.Read(buf); err != nil {
 			if _, err = conn.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
 				return fmt.Errorf("write cmd to Client failed : %v", err)
 			}
@@ -81,7 +82,7 @@ func Runcmd(conn net.Conn, ctx *context.Context) error {
 		}
 		host = net.IP(buf).String()
 	case FQDN_ATYPE:
-		if _, err := conn.Read(buf[:1]); err != nil {
+		if _, err := reader.Read(buf[:1]); err != nil {
 			if _, err = conn.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
 				return fmt.Errorf("write cmd to Client failed : %v", err)
 			}
@@ -92,7 +93,7 @@ func Runcmd(conn net.Conn, ctx *context.Context) error {
 		if aLen > net.IPv4len {
 			buf = make([]byte, aLen)
 		}
-		if _, err := conn.Read(buf[:aLen]); err != nil {
+		if _, err := reader.Read(buf[:aLen]); err != nil {
 			if _, err = conn.Write([]byte{SOCKS5_VERSION, GENERAL_SOCKS_SERVER_FAILURE_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
 				return fmt.Errorf("write cmd to Client failed : %v", err)
 			}
@@ -106,7 +107,7 @@ func Runcmd(conn net.Conn, ctx *context.Context) error {
 		return fmt.Errorf("not support address type : %v", aTyp)
 	}
 	ctx.Host = host
-	if _, err := conn.Read(buf[:2]); err != nil {
+	if _, err := reader.Read(buf[:2]); err != nil {
 		if _, err = conn.Write([]byte{SOCKS5_VERSION, ADDRESS_TYPE_NOT_SUPPORTED_REP, RESERVED, IPV4_ATYPE, 0, 0, 0, 0, 0, 0}); err != nil {
 			return fmt.Errorf("write cmd to Client failed : %v", err)
 		}
