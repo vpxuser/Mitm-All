@@ -37,13 +37,23 @@
 
 ##### 方法二：使用面具模块载入（适合真机）
 
+- 使用[MoveCertificate](https://github.com/ys1231/MoveCertificate)模块将用户证书目录的证书移动到系统证书目录
+
+![](./images/move_certificate.png)
+
 ##### 方法三：使用frida动态注入（适合没有内存动态防护的应用）
+
+- 使用[inject_ca_certificate.js](https://github.com/vpxuser/Awesome-Script/blob/main/inject_ca_certificate.js)脚本将证书注入到安卓APP，脚本运行前，请自行将证书文件名修改为ca.crt或打开脚本修改证书路径
+
+```cmd
+frida -U -f [APK包名] -l [脚本文件路径]
+```
 
 #### 取消证书锁定
 
 ##### 方法一：使用frida动态注入（适合没有内存动态防护的应用）
 
-- 使用[bypass_ssl_pinning.js](https://github.com/vpxuser/Awesome-Script/blob/main/bypass_ssl_pinning.js)脚本解除整数锁定
+- 使用[bypass_ssl_pinning.js](https://github.com/vpxuser/Awesome-Script/blob/main/bypass_ssl_pinning.js)脚本解除证书锁定
 
 ```cmd
 frida -U -f [APK包名] -l [脚本文件路径]
@@ -51,7 +61,11 @@ frida -U -f [APK包名] -l [脚本文件路径]
 
 ##### 方法二：使用面具模块载入（适合真机）
 
-#### 使用透明代理
+- 使用[JustTrustMe](https://github.com/Fuzion24/JustTrustMe)模块解除证书锁定
+
+![](./images/just_trust_me.png)
+
+#### 使用强制代理
 
 ##### 方法一：使用具有透明代理功能的代理应用
 
@@ -63,7 +77,19 @@ frida -U -f [APK包名] -l [脚本文件路径]
 
 ##### 方法二：使用frida动态注入（适合没有内存动态防护的应用）
 
+- 使用[force_use_proxy.js](https://github.com/vpxuser/Awesome-Script/blob/main/force_use_proxy.js)脚本让安卓APP强制走代理，代理地址默认为127.0.0.1:8080，如有需求请打开脚本修改默认配置
+
+```cmd
+frida -U -f [APK包名] -l [脚本文件路径]
+```
+
 ##### 方法三：系统命令设置iptables
+
+- 使用[set_iptables_proxy.bat](https://github.com/vpxuser/Awesome-Script/blob/main/set_iptables_proxy.bat)脚本设置透明代理
+
+```cmd
+.\set_iptables_proxy.bat set -d [安卓设备ID] -h [代理服务器IP] -p [代理服务器端口]
+```
 
 ## 编译
 
