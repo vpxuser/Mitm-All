@@ -4,67 +4,72 @@
 - 已实现HTTP、SOCKS5代理协议端口复用
 - 已实现TCP、HTTP、TLS中间人攻击功能
 
-## 抓不到包的常见原因
+## 前言
+
+### 安卓APP渗透抓不到包的常见原因
 
 1. 没有正确地将CA证书安装到/system/etc/security/cacerts（即没有将中间人CA证书安装到操作系统证书受信任根目录）
 2. 应用设置了SSL Pinning（即只信任应用包下的特定证书）
 3. 应用设置了NO_PROXY（即应用不走系统代理）或自行设置了应用层级的代理
 
-## 解决抓包困境的办法
+### 解决安卓APP渗透抓包困境的办法
 
-### 安装证书到/system/etc/security/cacerts目录
+#### 安装证书到收信人CA目录
 
-#### 方法一：直接安装（适合UserDebug版本的系统）
+##### 方法一：直接安装（适合UserDebug版本的系统）
 
-- 先使用remount.bat脚本重新挂载硬盘到系统盘
-  - 安卓设备ID：DeviceID，通过`adb devices`命令可以获取
-  - wait：重启参数，可选，有些设备需要重启才能挂载成功
+- 先使用[remount_to_system.bat](https://github.com/vpxuser/Awesome-Script/blob/main/remount_to_system.bat)脚本重新挂载硬盘到系统盘
+  - d：安卓设备ID（DeviceID），通过`adb devices`命令可以获取
+  - f：重启参数，可选，有些设备需要禁用安卓固件验证才能挂载成功
 
-```shell
-.\remount.bat [安卓设备ID] [wait]
+```cmd
+.\remount_to_system.bat -d [安卓设备ID] -f
 ```
 
-- 使用push.bat脚本上传CA证书到安卓设备
-  - 证书文件路径：CA证书文件所在的物理路径
+- 再使用[upload_ca_cert.bat](https://github.com/vpxuser/Awesome-Script/blob/main/upload_ca_cert.bat)脚本上传CA证书到安卓设备
+  - d：安卓设备ID（DeviceID），通过`adb devices`命令可以获取
+  - c：CA证书文件所在的物理路径
+  
 
-```shell
-.\push.bat [证书文件路径] [安卓设备ID]
+```cmd
+.\upload_ca_cert.bat -d [安卓设备ID] -c [证书文件路径]
 ```
 
-#### 方法二：使用面具模块载入（适合真机）
+##### 方法二：使用面具模块载入（适合真机）
 
-#### 方法三：使用frida动态注入（适合没有内存动态防护的应用）
+##### 方法三：使用frida动态注入（适合没有内存动态防护的应用）
 
-### 取消证书锁定SSL Unpinning
+#### 取消证书锁定
 
-#### 方法一：使用frida动态注入（适合没有内存动态防护的应用）
+##### 方法一：使用frida动态注入（适合没有内存动态防护的应用）
 
-#### 方法二：使用面具模块载入（适合真机）
+- 使用[bypass_ssl_pinning.js](https://github.com/vpxuser/Awesome-Script/blob/main/bypass_ssl_pinning.js)脚本解除整数锁定
 
-### 使用透明代理（iptables）
+```cmd
+frida -U -f [APK包名] -l [脚本文件路径]
+```
 
-#### 方法一：使用具有透明代理功能的代理应用
+##### 方法二：使用面具模块载入（适合真机）
 
-- 如：Proxifier
+#### 使用透明代理
 
-#### 方法二：使用frida动态注入（适合没有内存动态防护的应用）
+##### 方法一：使用具有透明代理功能的代理应用
 
-#### 方法三：系统命令设置iptables
+- 使用[Mitm-All](https://github.com/vpxuser/Mitm-All)配合透明代理工具强抓TCP流量，如：[Proxifier](https://www.proxifier.com/download/#android-tab)
 
-## 目的
+```cmd
+.\mitmall.exe
+```
 
-在针对APP渗透测试过程中，会发现某些APP不走系统代理，排查过后发现并不是SSL Pinning的问题，针对这种情况，如何强制抓去不走系统代理的数据包呢？
+##### 方法二：使用frida动态注入（适合没有内存动态防护的应用）
 
-- 相信使用过Proxifier的朋友都知道，Proxifier能强制使所有协议都走Socks5代理，那么现在需要一个工具，将Proxifier转发的流量转换为HTTP和HTTPS，这样，不走系统代理的数据包也能被我们抓取到了。
-- 其实，Socks5中间人攻击目前也有解决方案，比如说：Yakit、Charles等，但是个人使用体验并不好（原因：Yakit的UI太复杂、Charles没有强大的插件生态支持），所以就开发了这个工具，通过这个工具联动Burp Suite，就能让Burp Suite实现Socks5中间人攻击。
+##### 方法三：系统命令设置iptables
 
-## 使用方法
-
-### 编译
+## 编译
 
 - 编译linux可执行文件
 
-```powershell
+```cmd
 set GOOS=linux
 set GOARCH=amd64
 go build -o mitmall main.go
@@ -72,7 +77,7 @@ go build -o mitmall main.go
 
 - 编译windows可执行文件
 
-```powershell
+```cmd
 set GOOS=windows
 set GOARCH=amd64
 go build -o mitmall.exe main.go
@@ -80,16 +85,15 @@ go build -o mitmall.exe main.go
 
 - 编译macOS可执行文件
 
-```powershell
+```cmd
 set GOOS=darwin
 set GOARCH=amd64
 go build -o mitmall main.go
 ```
 
-### 配置
+## 配置
 
-- 在可执行程序目录下创建一个config文件夹
-- 在config文件夹下创建一个config.yml文件，config.yml文件配置参考
+- 在可执行程序目录下创建一个config文件夹，在config文件夹下创建一个config.yml文件，config.yml文件配置参考
 
 ```yaml
 log:
@@ -153,24 +157,23 @@ db:
     path: config/sqlite/main.db
 ```
 
-### 运行
+## 运行
 
-- 打开命令行，并进入可执行程序所在目录
-- 运行可执行程序
+- 打开命令行，并进入可执行程序所在目录，运行可执行程序
 
 ```powershell
 .\mitmall.exe
 ```
 
-### 代理
+## 代理
 
-- 使用socks5代理客户端配置代理，这里使用proxifier做演示
+- 使用SOCKS5代理客户端配置代理，这里使用Proxifier做演示
 
 ![proxifier配置](./images/1.png)
 
-- 安装抓包工具证书到移动设备或模拟器（注意：需要root权限），这里使用burpsuite
-- 在config.yml文件配置下游代理为burpsuite代理地址（这里使用burpsuite默认地址http://127.0.0.1:8080）
-- 抓包
+- 安装抓包工具证书到移动设备或模拟器（注意：需要ROOT权限），这里使用BurpSuite
+- 在config.yml文件配置下游代理为BurpSuite代理地址（这里使用BurpSuite默认地址http://127.0.0.1:8080）
+- BurpSuite通过上游代理获取到HTTP报文，抓包成功
 
 ![burp抓包](./images/2.png)
 
