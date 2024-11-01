@@ -47,7 +47,7 @@ func (m *MITMServer) Run() {
 
 	for {
 		ctx := context.NewContext()
-		ctx.LogTamplate = fmt.Sprintf("[clientId:%s]", ctx.ContextId)
+		ctx.LogTamplate = fmt.Sprintf("[contextId:%s]", ctx.ContextId)
 
 		client, err := server.Accept()
 		if err != nil {
@@ -55,10 +55,10 @@ func (m *MITMServer) Run() {
 			continue
 		}
 
-		ctx.LogTamplate = fmt.Sprintf("%s [clientIP:%s] [%s]", ctx.LogTamplate, client.RemoteAddr().String(), colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "TCP"))
+		ctx.LogTamplate = fmt.Sprintf("%s [clientIp:%s] [%s]", ctx.LogTamplate, client.RemoteAddr().String(), colorutils.SetColor(colorutils.YELLOW_COLOR_TYPE, "TCP"))
 		reg := regexp.MustCompile(`:\d+$`)
-		ctx.Client2MitmLog = fmt.Sprintf("[clientId:%s] [%s => %s]", ctx.ContextId, client.RemoteAddr().String(), reg.FindString(client.LocalAddr().String()))
-		ctx.Mitm2ClientLog = fmt.Sprintf("[clientId:%s] [%s => %s]", ctx.ContextId, reg.FindString(client.LocalAddr().String()), client.RemoteAddr().String())
+		ctx.Client2MitmLog = fmt.Sprintf("[contextId:%s] [%s => %s]", ctx.ContextId, client.RemoteAddr().String(), reg.FindString(client.LocalAddr().String()))
+		ctx.Mitm2ClientLog = fmt.Sprintf("[contextId:%s] [%s => %s]", ctx.ContextId, reg.FindString(client.LocalAddr().String()), client.RemoteAddr().String())
 
 		yaklog.Infof("%s New Client Connection Successfully Established", ctx.LogTamplate)
 
